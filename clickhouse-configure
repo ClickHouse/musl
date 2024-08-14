@@ -1,0 +1,7 @@
+#!/bin/sh
+CURDIR=$(dirname "$(readlink -f "$0")")
+
+# These are required for unwinding to work:
+#   * -funwind-tables -fasynchronous-unwind-tables  - tell the compiler to generate unwind tables,
+#   * --enable-debug  - tell musl to (1) preprocess assembly files to generate unwind information, (2) add -g (generate debug info, not required for unwinding).
+CFLAGS='-funwind-tables -fasynchronous-unwind-tables' $CURDIR/configure --enable-debug

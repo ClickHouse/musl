@@ -1,9 +1,6 @@
 # Insert GAS CFI directives ("control frame information") into x86-64 asm input
 
 BEGIN {
-  # don't put CFI data in the .eh_frame ELF section (which we don't keep)
-  print ".cfi_sections .debug_frame"
-
   # only emit CFI directives inside a function
   in_function = 0
 

@@ -8,9 +8,6 @@
 #   and down the call stack and examine the values of local variables
 
 BEGIN {
-  # don't put CFI data in the .eh_frame ELF section (which we don't keep)
-  print ".cfi_sections .debug_frame"
-
   # only emit CFI directives inside a function
   in_function = 0
 
