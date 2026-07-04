@@ -15,6 +15,13 @@
 .hidden __syscall_cp_asm
 .type __syscall_cp_asm,%function
 __syscall_cp_asm:
+// The default CFI rules (CFA = sp on entry, return address in x30) hold
+// throughout: the function touches neither sp nor x30. Without an unwind
+// table entry, a stack trace taken while a thread is blocked in the syscall -
+// the query profiler signal handler does exactly that for every cancellable
+// syscall, e.g. clock_nanosleep under sleep() - falls apart right after this
+// frame and never reaches the calling application code.
+.cfi_startproc
 __cp_begin:
 	ldr w0,[x0]
 	cbnz w0,__cp_cancel
@@ -30,3 +37,4 @@ __cp_end:
 	ret
 __cp_cancel:
 	b __cancel
+.cfi_endproc
