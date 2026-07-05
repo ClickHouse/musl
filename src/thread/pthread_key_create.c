@@ -95,5 +95,30 @@ void __pthread_tsd_run_dtors()
 	}
 }
 
+/* Expose the calling thread's TSD array (the pthread_setspecific slots) for
+ * sanitizers. LeakSanitizer scans each thread's TLS range for pointers into
+ * the heap; on glibc that range is extended to cover the TCB, where the
+ * specifics live inline (pthread::specific_1stblock). On musl the slots are
+ * a separate array placed at the top of the thread mapping, above the static
+ * TLS block, so without this hook an allocation referenced only through
+ * pthread_setspecific - for example libc++'s per-thread __thread_struct of
+ * any thread still running at exit - is reported as a leak.
+ *
+ * Deliberately placed in this translation unit: the sanitizer runtime only
+ * references the function weakly, which does not extract archive members on
+ * its own, and any program that can have TSD-referenced allocations extracts
+ * this object anyway through pthread_key_create.
+ *
+ * Not a musl-upstream interface; used by the ClickHouse compiler-rt build
+ * (GetTls in sanitizer_linux_libcdep.cpp). */
+void __pthread_current_tsd_range(void **begin, void **end)
+{
+	pthread_t self = __pthread_self();
+	void **tsd = self->tsd;
+	if (!tsd) tsd = __pthread_tsd_main;
+	*begin = (void *)tsd;
+	*end = (void *)((char *)tsd + __pthread_tsd_size);
+}
+
 weak_alias(__pthread_key_create, pthread_key_create);
 weak_alias(__pthread_key_delete, pthread_key_delete);
