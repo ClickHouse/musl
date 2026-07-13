@@ -82,8 +82,14 @@ long sysconf(int name)
 		[_SC_IOV_MAX] = IOV_MAX,
 		[_SC_THREADS] = VER,
 		[_SC_THREAD_SAFE_FUNCTIONS] = VER,
-		[_SC_GETGR_R_SIZE_MAX] = -1,
-		[_SC_GETPW_R_SIZE_MAX] = -1,
+		/* POSIX allows -1 ("no definite limit") here, but glibc returns
+		 * its NSS_BUFLEN_GROUP/NSS_BUFLEN_PASSWD (both 1024) and existing
+		 * software treats -1 as an error (e.g. libhdfs3 fails to connect
+		 * instead of picking a default buffer size). The value is only a
+		 * sizing hint: callers must retry with a larger buffer on ERANGE
+		 * either way. */
+		[_SC_GETGR_R_SIZE_MAX] = 1024,
+		[_SC_GETPW_R_SIZE_MAX] = 1024,
 		[_SC_LOGIN_NAME_MAX] = 256,
 		[_SC_TTY_NAME_MAX] = TTY_NAME_MAX,
 		[_SC_THREAD_DESTRUCTOR_ITERATIONS] = PTHREAD_DESTRUCTOR_ITERATIONS,
