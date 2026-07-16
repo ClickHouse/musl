@@ -3,6 +3,7 @@
 #include "stdio_impl.h"
 #include "libc.h"
 #include "lock.h"
+#include "rseq.h"
 #include <sys/mman.h>
 #include <string.h>
 #include <stddef.h>
@@ -159,6 +160,16 @@ _Noreturn void __pthread_exit(void *result)
 		 * processed above, so unregister it with the kernel. */
 		if (self->robust_list.off)
 			__syscall(SYS_set_robust_list, 0, 3*sizeof(long));
+
+		/* The rseq area (see sched_getcpu) lives in this mapping;
+		 * unregister it so the kernel does not write into the
+		 * unmapped range between __unmapself and thread exit.
+		 * Signals are blocked above, so nothing can re-register.
+		 * Joinable threads need no unregistration: their mapping
+		 * is only freed by the joiner after kernel task exit. */
+		if (self->rseq_state == RSEQ_STATE_REGISTERED)
+			__syscall(SYS_rseq, __rseq_area(self), RSEQ_ABI_SIZE,
+				RSEQ_FLAG_UNREGISTER, RSEQ_SIG);
 
 		/* The following call unmaps the thread's stack mapping
 		 * and then exits without touching the stack. */
