@@ -214,6 +214,9 @@ static int start(void *p)
 			for (;;) __syscall(SYS_exit, 0);
 		}
 	}
+	/* Before unblocking signals, so a handler that lands here already has a
+	 * registered area to read rather than racing the registration. */
+	if (__rseq_size) __rseq_register(__pthread_self());
 	__syscall(SYS_rt_sigprocmask, SIG_SETMASK, &args->sig_mask, 0, _NSIG/8);
 	__pthread_exit(args->start_func(args->start_arg));
 	return 0;
@@ -222,6 +225,7 @@ static int start(void *p)
 static int start_c11(void *p)
 {
 	struct start_args *args = p;
+	if (__rseq_size) __rseq_register(__pthread_self());
 	int (*start)(void*) = (int(*)(void*)) args->start_func;
 	__pthread_exit((void *)(uintptr_t)start(args->start_arg));
 	return 0;
