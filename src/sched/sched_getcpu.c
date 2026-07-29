@@ -31,29 +31,13 @@ int sched_getcpu(void)
 	pthread_t self = __pthread_self();
 
 	/* Fast path: the kernel keeps cpu_id in the registered rseq area
-	 * current across migrations, making this a plain memory read.
-	 * Registration is lazy, on the first call of each thread; the
-	 * signal handler reentrancy cases are all benign: a nested call
-	 * either also registers (the outer one then gets -EBUSY, treated
-	 * as registered) or reads a live area. Only rseq_cs and flags are
-	 * written before registering - both must be 0, and writing them
-	 * never disturbs a concurrently live registration since this
-	 * implementation keeps them 0 forever. */
+	 * current across migrations, so this is a plain memory read. Every
+	 * thread registers at its entry point before running any user code
+	 * (see rseq.c), so there is nothing to set up here, and no way for a
+	 * signal handler to observe a half-registered area. */
 	if (self->rseq_state == RSEQ_STATE_REGISTERED) {
 		r = (int)__rseq_area(self)->cpu_id;
 		if (r >= 0) return r;
-	} else if (self->rseq_state == RSEQ_STATE_UNREGISTERED) {
-		volatile struct k_rseq *area = __rseq_area(self);
-		area->rseq_cs = 0;
-		area->flags = 0;
-		r = __syscall(SYS_rseq, area, RSEQ_ABI_SIZE, 0, RSEQ_SIG);
-		if (r == 0 || r == -EBUSY) {
-			self->rseq_state = RSEQ_STATE_REGISTERED;
-			r = (int)area->cpu_id;
-			if (r >= 0) return r;
-		} else {
-			self->rseq_state = RSEQ_STATE_UNAVAILABLE;
-		}
 	}
 
 #ifdef VDSO_GETCPU_SYM

@@ -8,6 +8,7 @@
 #include "libc.h"
 #include "atomic.h"
 #include "syscall.h"
+#include "rseq.h"
 
 volatile int __thread_list_lock;
 
@@ -24,12 +25,19 @@ int __init_tp(void *p)
 	td->robust_list.head = &td->robust_list.head;
 	td->sysinfo = __sysinfo;
 	td->next = td->prev = td;
+	/* Must come after __set_thread_area: __rseq_init publishes the area's
+	 * offset from the thread pointer this call just installed. */
+	__rseq_init(td);
 	return 0;
 }
 
 static struct builtin_tls {
 	char c;
-	struct pthread pt;
+	/* Over-aligned so that MIN_TLS_ALIGN, and with it libc.tls_align, is
+	 * at least 32. That gives struct pthread the same alignment in every
+	 * thread, which is what keeps the rseq area a fixed distance from the
+	 * thread pointer and so describable by a single __rseq_offset. */
+	struct pthread pt __attribute__((aligned(32)));
 	void *space[16];
 } builtin_tls[1];
 #define MIN_TLS_ALIGN offsetof(struct builtin_tls, pt)
