@@ -1,5 +1,5 @@
 /*
- * memcpy - copy memory area
+ * memcpy/memmove - copy memory area
  *
  * Copyright (c) 2012-2020, Arm Limited.
  * SPDX-License-Identifier: MIT
@@ -38,21 +38,35 @@
 #define H_h     srcend
 #define tmp1    x14
 
-/* This implementation of memcpy uses unaligned accesses and branchless
+/* This implementation handles overlaps and supports both memcpy and memmove
+   from a single entry point.  It uses unaligned accesses and branchless
    sequences to keep the code small, simple and improve performance.
 
    Copies are split into 3 main cases: small copies of up to 32 bytes, medium
-   copies of up to 128 bytes, and large copies.  The overhead of the overlap
-   check is negligible since it is only required for large copies.
+   copies of up to 128 bytes, and large copies.  Small and medium copies read
+   all data before writing, so they are overlap-safe in both directions; the
+   overhead of the overlap check is negligible since it is only required for
+   large copies.
 
    Large copies use a software pipelined loop processing 64 bytes per iteration.
    The destination pointer is 16-byte aligned to minimize unaligned accesses.
    The loop tail is handled by always copying 64 bytes from the end.
 */
 
+.global memmove
+.type memmove,%function
 .global memcpy
 .type memcpy,%function
+memmove:
 memcpy:
+
+// Leaf function that never touches sp or x30, so the default unwind rules
+// (CFA = sp, return address in x30) hold at every instruction and this bare
+// .cfi_startproc emits complete unwind info for both entry points. Without
+// an FDE the unwinder gives up right here, so profiling signals and faults
+// landing in one of the hottest functions lose the entire caller chain.
+// Upstream ARM optimized-routines emits the same via its ENTRY/END macros.
+.cfi_startproc
 	add     srcend, src, count
 	add     dstend, dstin, count
 	cmp     count, 128
@@ -139,6 +153,11 @@ memcpy:
 	.p2align 4
 	/* Copy more than 128 bytes.  */
 .Lcopy_long:
+	/* Use backwards copy if there is an overlap.  */
+	sub     tmp1, dstin, src
+	cbz     tmp1, .Lcopy0
+	cmp     tmp1, count
+	b.lo    .Lcopy_long_backwards
 
 	/* Copy 16 bytes and then align dst to 16-byte alignment.  */
 
@@ -183,4 +202,52 @@ memcpy:
 	stp     C_l, C_h, [dstend, -16]
 	ret
 
+	.p2align 4
+
+	/* Large backwards copy for overlapping copies.
+	   Copy 16 bytes and then align dst to 16-byte alignment.  */
+.Lcopy_long_backwards:
+	ldp     D_l, D_h, [srcend, -16]
+	and     tmp1, dstend, 15
+	sub     srcend, srcend, tmp1
+	sub     count, count, tmp1
+	ldp     A_l, A_h, [srcend, -16]
+	stp     D_l, D_h, [dstend, -16]
+	ldp     B_l, B_h, [srcend, -32]
+	ldp     C_l, C_h, [srcend, -48]
+	ldp     D_l, D_h, [srcend, -64]!
+	sub     dstend, dstend, tmp1
+	subs    count, count, 128
+	b.ls    .Lcopy64_from_start
+
+.Lloop64_backwards:
+	stp     A_l, A_h, [dstend, -16]
+	ldp     A_l, A_h, [srcend, -16]
+	stp     B_l, B_h, [dstend, -32]
+	ldp     B_l, B_h, [srcend, -32]
+	stp     C_l, C_h, [dstend, -48]
+	ldp     C_l, C_h, [srcend, -48]
+	stp     D_l, D_h, [dstend, -64]!
+	ldp     D_l, D_h, [srcend, -64]!
+	subs    count, count, 64
+	b.hi    .Lloop64_backwards
+
+	/* Write the last iteration and copy 64 bytes from the start.  */
+.Lcopy64_from_start:
+	ldp     G_l, G_h, [src, 48]
+	stp     A_l, A_h, [dstend, -16]
+	ldp     A_l, A_h, [src, 32]
+	stp     B_l, B_h, [dstend, -32]
+	ldp     B_l, B_h, [src, 16]
+	stp     C_l, C_h, [dstend, -48]
+	ldp     C_l, C_h, [src]
+	stp     D_l, D_h, [dstend, -64]
+	stp     G_l, G_h, [dstin, 48]
+	stp     A_l, A_h, [dstin, 32]
+	stp     B_l, B_h, [dstin, 16]
+	stp     C_l, C_h, [dstin]
+	ret
+
+.cfi_endproc
 .size memcpy,.-memcpy
+.size memmove,.-memmove
