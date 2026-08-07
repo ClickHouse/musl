@@ -59,6 +59,14 @@
 .type memcpy,%function
 memmove:
 memcpy:
+
+// Leaf function that never touches sp or x30, so the default unwind rules
+// (CFA = sp, return address in x30) hold at every instruction and this bare
+// .cfi_startproc emits complete unwind info for both entry points. Without
+// an FDE the unwinder gives up right here, so profiling signals and faults
+// landing in one of the hottest functions lose the entire caller chain.
+// Upstream ARM optimized-routines emits the same via its ENTRY/END macros.
+.cfi_startproc
 	add     srcend, src, count
 	add     dstend, dstin, count
 	cmp     count, 128
@@ -240,5 +248,6 @@ memcpy:
 	stp     C_l, C_h, [dstin]
 	ret
 
+.cfi_endproc
 .size memcpy,.-memcpy
 .size memmove,.-memmove

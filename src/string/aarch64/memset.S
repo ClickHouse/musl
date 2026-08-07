@@ -23,6 +23,11 @@
 .type memset,%function
 memset:
 
+// Leaf function that never touches sp or x30: the default unwind rules
+// (CFA = sp, return address in x30) hold at every instruction, so this bare
+// .cfi_startproc emits complete unwind info. Without an FDE, stack traces
+// from profiling signals or faults landing here lose the caller chain.
+.cfi_startproc
 	dup     v0.16B, valw
 	add     dstend, dstin, count
 
@@ -111,5 +116,6 @@ memset:
 	stp     q0, q0, [dstend, -32]
 	ret
 
+.cfi_endproc
 .size memset,.-memset
 
