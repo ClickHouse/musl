@@ -31,7 +31,7 @@ static int addrconfig_cb(void *pctx, struct nlmsghdr *h)
 		} else if (msg->ifa_family == AF_INET6 && RTA_DATALEN(rta) == 16) {
 			struct in6_addr a;
 			memcpy(&a, RTA_DATA(rta), 16);
-			if (!IN6_IS_ADDR_LOOPBACK(&a) && !IN6_IS_ADDR_LINKLOCAL(&a))
+			if (!IN6_IS_ADDR_LOOPBACK(&a))
 				ctx->seen6 = 1;
 		}
 	}
@@ -73,9 +73,9 @@ int getaddrinfo(const char *restrict host, const char *restrict serv, const stru
 
 	if (flags & AI_ADDRCONFIG) {
 		/* Define the "an address is configured" condition for address
-		 * families as the system having at least one address of the
-		 * family which is neither loopback nor (for IPv6) link-local,
-		 * matching the glibc definition. The upstream musl definition
+		 * families as the system having at least one non-loopback
+		 * address of the family, matching the glibc definition
+		 * (__check_pf). The upstream musl definition
 		 * (ability to create a socket for the family plus routability
 		 * of the loopback address) reports IPv6 as configured on any
 		 * host with ::1 assigned to the loopback interface, e.g. in
