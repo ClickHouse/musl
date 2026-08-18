@@ -35,6 +35,12 @@ struct k_rseq {
 #define RSEQ_SIG 0x53053053
 #define RSEQ_FLAG_UNREGISTER 1
 
+/* glibc-compatible cpu_id sentinels. The kernel only ever stores
+ * nonnegative CPU numbers, so external readers of the __rseq_* ABI use
+ * these to tell a live area from one whose registration failed. */
+#define RSEQ_CPU_ID_UNINITIALIZED ((uint32_t)-1)
+#define RSEQ_CPU_ID_REGISTRATION_FAILED ((uint32_t)-2)
+
 #define RSEQ_STATE_UNREGISTERED 0
 #define RSEQ_STATE_REGISTERED 1
 #define RSEQ_STATE_UNAVAILABLE 2
@@ -55,7 +61,10 @@ static inline volatile struct k_rseq *__rseq_area(pthread_t self)
  * straight off the thread pointer instead of calling sched_getcpu.
  * __rseq_size is 0 until the main thread registers successfully, and stays
  * 0 on a kernel or sandbox without rseq; it doubles as the flag that keeps
- * pthread_create from attempting a registration that cannot succeed. */
+ * pthread_create from attempting a registration that cannot succeed. A
+ * thread whose own registration fails after the globals are published
+ * carries RSEQ_CPU_ID_REGISTRATION_FAILED in its cpu_id field, as in
+ * glibc, so readers never mistake its dead area for a thread on CPU 0. */
 extern ptrdiff_t __rseq_offset;
 extern unsigned int __rseq_size;
 extern unsigned int __rseq_flags;

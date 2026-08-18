@@ -22,20 +22,28 @@ void __rseq_register(pthread_t self)
 	 * that ever stop holding, leave this thread on the syscall path instead
 	 * of letting the program read an address that is not its area. */
 	if ((char *)area - (char *)TP_ADJ(self) != __rseq_offset) {
+		area->cpu_id = RSEQ_CPU_ID_REGISTRATION_FAILED;
 		self->rseq_state = RSEQ_STATE_UNAVAILABLE;
 		return;
 	}
+	area->cpu_id_start = 0;
+	area->cpu_id = RSEQ_CPU_ID_UNINITIALIZED;
 	area->rseq_cs = 0;
 	area->flags = 0;
 	/* Anything other than success means this thread has no area of ours to
 	 * read: ENOSYS on a pre-4.18 kernel or a seccomp sandbox, and EBUSY if
 	 * some other component registered an area of its own first - in which
 	 * case the kernel maintains that one and ours would stay zero forever,
-	 * silently reporting CPU 0 everywhere. Fall back to the syscall path. */
-	if (__syscall(SYS_rseq, area, RSEQ_ABI_SIZE, 0, RSEQ_SIG) == 0)
+	 * silently reporting CPU 0 everywhere. Fall back to the syscall path,
+	 * and leave the glibc failure marker in cpu_id: once __rseq_size is
+	 * published for the process, external readers of TP + __rseq_offset
+	 * have no other way to tell this thread's dead area from CPU 0. */
+	if (__syscall(SYS_rseq, area, RSEQ_ABI_SIZE, 0, RSEQ_SIG) == 0) {
 		self->rseq_state = RSEQ_STATE_REGISTERED;
-	else
+	} else {
+		area->cpu_id = RSEQ_CPU_ID_REGISTRATION_FAILED;
 		self->rseq_state = RSEQ_STATE_UNAVAILABLE;
+	}
 }
 
 /* What the initial thread has registered, if anything. The dynamic linker sets
