@@ -22,16 +22,18 @@ int __get_resolv_conf(struct resolvconf *conf, char *search, size_t search_sz)
 	if (!f) switch (errno) {
 	case ENOENT:
 	case ENOTDIR:
-	case EACCES:
 		/* When no resolv.conf exists at all (e.g. a container image
 		 * built "from scratch"), fall back to well-known public DNS
 		 * resolvers instead of localhost, which cannot answer in such
 		 * an environment. A resolv.conf that exists but configures no
-		 * nameservers keeps the upstream localhost fallback below,
-		 * since it expresses an intentional local configuration. */
+		 * nameservers (or exists but is unreadable) keeps the upstream
+		 * localhost fallback below, since it expresses an intentional
+		 * local configuration. */
 		if (__lookup_ipliteral(conf->ns+nns, "1.1.1.1", AF_UNSPEC) > 0) nns++;
 		if (__lookup_ipliteral(conf->ns+nns, "8.8.8.8", AF_UNSPEC) > 0) nns++;
 		if (__lookup_ipliteral(conf->ns+nns, "2606:4700:4700::1111", AF_UNSPEC) > 0) nns++;
+		goto no_resolv_conf;
+	case EACCES:
 		goto no_resolv_conf;
 	default:
 		return -1;
