@@ -58,6 +58,11 @@ struct pthread {
 	volatile int killlock[1];
 	char *dlerror_buf;
 	void *stdio_locks;
+	/* rseq registration state and area for sched_getcpu (see
+	 * src/internal/rseq.h). The buffer is over-sized so a 32-aligned
+	 * kernel rseq area fits at any struct alignment. */
+	int rseq_state;
+	unsigned char rseq_area_buf[63];
 
 	/* Part 3 -- the positions of these fields relative to
 	 * the end of the structure is external and internal ABI. */
