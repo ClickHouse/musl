@@ -1,6 +1,12 @@
 .global memset
 .type memset,@function
 memset:
+
+# Leaf function that never touches %rsp: the default unwind rules
+# (CFA = %rsp + 8, return address at CFA - 8) hold at every instruction, so
+# this bare .cfi_startproc emits complete unwind info. Without an FDE, stack
+# traces from profiling signals or faults landing here lose the caller chain.
+.cfi_startproc
 	movzbq %sil,%rax
 	mov $0x101010101010101,%r8
 	imul %r8,%rax
@@ -70,3 +76,4 @@ memset:
 	sub %rdx,%rcx
 	add %rdx,%rdi
 	jmp 1b
+.cfi_endproc

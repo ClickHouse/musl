@@ -8,6 +8,35 @@
 #include <endian.h>
 #include <errno.h>
 #include "lookup.h"
+#include "netlink.h"
+
+struct addrconfig_ctx {
+	int seen4, seen6;
+};
+
+static int addrconfig_cb(void *pctx, struct nlmsghdr *h)
+{
+	struct addrconfig_ctx *ctx = pctx;
+	struct ifaddrmsg *msg = NLMSG_DATA(h);
+	struct rtattr *rta;
+	if (h->nlmsg_type != RTM_NEWADDR) return 0;
+	for (rta = NLMSG_RTA(h, sizeof(*msg)); NLMSG_RTAOK(rta, h); rta = RTA_NEXT(rta)) {
+		if (rta->rta_type != IFA_ADDRESS && rta->rta_type != IFA_LOCAL)
+			continue;
+		if (msg->ifa_family == AF_INET && RTA_DATALEN(rta) == 4) {
+			struct in_addr a;
+			memcpy(&a, RTA_DATA(rta), 4);
+			if (a.s_addr != htonl(INADDR_LOOPBACK))
+				ctx->seen4 = 1;
+		} else if (msg->ifa_family == AF_INET6 && RTA_DATALEN(rta) == 16) {
+			struct in6_addr a;
+			memcpy(&a, RTA_DATA(rta), 16);
+			if (!IN6_IS_ADDR_LOOPBACK(&a))
+				ctx->seen6 = 1;
+		}
+	}
+	return 0;
+}
 
 int getaddrinfo(const char *restrict host, const char *restrict serv, const struct addrinfo *restrict hint, struct addrinfo **restrict res)
 {
@@ -44,45 +73,28 @@ int getaddrinfo(const char *restrict host, const char *restrict serv, const stru
 
 	if (flags & AI_ADDRCONFIG) {
 		/* Define the "an address is configured" condition for address
-		 * families via ability to create a socket for the family plus
-		 * routability of the loopback address for the family. */
-		static const struct sockaddr_in lo4 = {
-			.sin_family = AF_INET, .sin_port = 65535,
-			.sin_addr.s_addr = __BYTE_ORDER == __BIG_ENDIAN
-				? 0x7f000001 : 0x0100007f
-		};
-		static const struct sockaddr_in6 lo6 = {
-			.sin6_family = AF_INET6, .sin6_port = 65535,
-			.sin6_addr = IN6ADDR_LOOPBACK_INIT
-		};
+		 * families as the system having at least one non-loopback
+		 * address of the family, matching the glibc definition
+		 * (__check_pf). The upstream musl definition
+		 * (ability to create a socket for the family plus routability
+		 * of the loopback address) reports IPv6 as configured on any
+		 * host with ::1 assigned to the loopback interface, e.g. in
+		 * IPv4-only containers, making names such as "localhost"
+		 * resolve to the unusable ::1 first. */
+		struct addrconfig_ctx ctx = { 0, 0 };
+		int seen[2];
 		int tf[2] = { AF_INET, AF_INET6 };
-		const void *ta[2] = { &lo4, &lo6 };
-		socklen_t tl[2] = { sizeof lo4, sizeof lo6 };
+		if (__rtnetlink_enumerate(AF_UNSPEC, AF_UNSPEC,
+				addrconfig_cb, &ctx) < 0) {
+			/* If interface addresses cannot be enumerated, assume
+			 * both families are configured, as glibc does. */
+			ctx.seen4 = ctx.seen6 = 1;
+		}
+		seen[0] = ctx.seen4;
+		seen[1] = ctx.seen6;
 		for (i=0; i<2; i++) {
 			if (family==tf[1-i]) continue;
-			int s = socket(tf[i], SOCK_CLOEXEC|SOCK_DGRAM,
-				IPPROTO_UDP);
-			if (s>=0) {
-				int cs;
-				pthread_setcancelstate(
-					PTHREAD_CANCEL_DISABLE, &cs);
-				int r = connect(s, ta[i], tl[i]);
-				int saved_errno = errno;
-				pthread_setcancelstate(cs, 0);
-				close(s);
-				if (!r) continue;
-				errno = saved_errno;
-			}
-			switch (errno) {
-			case EADDRNOTAVAIL:
-			case EAFNOSUPPORT:
-			case EHOSTUNREACH:
-			case ENETDOWN:
-			case ENETUNREACH:
-				break;
-			default:
-				return EAI_SYSTEM;
-			}
+			if (seen[i]) continue;
 			if (family == tf[i]) no_family = 1;
 			family = tf[1-i];
 		}
