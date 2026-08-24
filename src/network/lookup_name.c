@@ -98,6 +98,29 @@ static int name_from_hosts(struct address buf[static MAXADDRS], char canon[stati
 	return cnt ? cnt : badfam;
 }
 
+static int name_from_localhost(struct address buf[static 2], const char *name, int family)
+{
+	/* RFC 6761: "localhost" and any name under ".localhost" resolve to
+	 * the loopback addresses and must never be sent to DNS resolvers.
+	 * /etc/hosts is processed before this and can still override them.
+	 * This matches the behavior of c-ares and of systemd-resolved and
+	 * keeps "localhost" working when no /etc/hosts exists at all. */
+	static const char tail[] = "localhost";
+	size_t l = strlen(name), i;
+	int cnt = 0;
+	if (l && name[l-1]=='.') l--;
+	if (l != 9 && (l < 11 || name[l-10] != '.'))
+		return 0;
+	for (i=0; i<9; i++)
+		if (tolower(((unsigned char *)name)[l-9+i]) != tail[i])
+			return 0;
+	if (family != AF_INET6)
+		buf[cnt++] = (struct address){ .family = AF_INET, .addr = { 127,0,0,1 } };
+	if (family != AF_INET)
+		buf[cnt++] = (struct address){ .family = AF_INET6, .addr = { [15] = 1 } };
+	return cnt;
+}
+
 struct dpc_ctx {
 	struct address *addrs;
 	char *canon;
@@ -331,6 +354,7 @@ int __lookup_name(struct address buf[static MAXADDRS], char canon[static 256], c
 	if (!cnt) cnt = name_from_numeric(buf, name, family);
 	if (!cnt && !(flags & AI_NUMERICHOST)) {
 		cnt = name_from_hosts(buf, canon, name, family);
+		if (!cnt) cnt = name_from_localhost(buf, name, family);
 		if (!cnt) cnt = name_from_dns_search(buf, canon, name, family);
 	}
 	if (cnt<=0) return cnt ? cnt : EAI_NONAME;
