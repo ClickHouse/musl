@@ -32,7 +32,20 @@ struct k_rseq {
 };
 
 #define RSEQ_ABI_SIZE 32
+
+/* Per-arch abort signature, matching glibc and librseq, so rseq critical
+ * sections assembled against their headers can run on an area we registered:
+ * the kernel delivers SIGSEGV on an abort whose signature differs from the
+ * registered one. On aarch64 the value doubles as a trapping instruction
+ * (BRK #0x45E0) placed right before each abort handler. */
+#if defined(__x86_64__)
 #define RSEQ_SIG 0x53053053
+#elif defined(__aarch64__)
+#define RSEQ_SIG 0xd428bc00
+#else
+#error "no rseq abort signature defined for this architecture"
+#endif
+
 #define RSEQ_FLAG_UNREGISTER 1
 
 /* glibc-compatible cpu_id sentinels. The kernel only ever stores
