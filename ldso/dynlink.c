@@ -128,7 +128,7 @@ static struct builtin_tls {
 	/* Over-aligned for the same reason as in src/env/__init_tls.c: it sets
 	 * MIN_TLS_ALIGN, and the rseq area's offset from the thread pointer is
 	 * only uniform across threads if struct pthread is uniformly aligned. */
-	struct pthread pt __attribute__((aligned(32)));
+	struct pthread pt __attribute__((aligned(64)));
 	void *space[16];
 } builtin_tls[1];
 #define MIN_TLS_ALIGN offsetof(struct builtin_tls, pt)

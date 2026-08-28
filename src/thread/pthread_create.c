@@ -168,7 +168,7 @@ _Noreturn void __pthread_exit(void *result)
 		 * Joinable threads need no unregistration: their mapping
 		 * is only freed by the joiner after kernel task exit. */
 		if (self->rseq_state == RSEQ_STATE_REGISTERED)
-			__syscall(SYS_rseq, __rseq_area(self), RSEQ_ABI_SIZE,
+			__syscall(SYS_rseq, __rseq_area(self), __rseq_alloc_len,
 				RSEQ_FLAG_UNREGISTER, RSEQ_SIG);
 
 		/* The following call unmaps the thread's stack mapping
