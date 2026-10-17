@@ -2,6 +2,7 @@
 #include <elf.h>
 #include <limits.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <string.h>
 #include <stddef.h>
 #include "pthread_impl.h"
@@ -110,6 +111,21 @@ static void static_init_tls(size_t *aux)
 			__default_stacksize =
 				phdr->p_memsz < DEFAULT_STACK_MAX ?
 				phdr->p_memsz : DEFAULT_STACK_MAX;
+	}
+
+	/* Like glibc, give new threads a stack of the size of the
+	 * RLIMIT_STACK soft limit when it is finite, so that `ulimit -s`
+	 * controls it; PT_GNU_STACK stays the default for an unlimited
+	 * one. glibc does not cap it either; the cap here only keeps it
+	 * representable in __default_stacksize. */
+	unsigned long long rlim[2];
+	if (!__syscall(SYS_prlimit64, 0, RLIMIT_STACK, 0, rlim)
+	    && rlim[0] < SYSCALL_RLIM_INFINITY) {
+		size_t max = UINT_MAX & -PAGE_SIZE;
+		size_t size = rlim[0] < max ?
+			rlim[0] + PAGE_SIZE-1 & -PAGE_SIZE : max;
+		__default_stacksize =
+			size > PTHREAD_STACK_MIN ? size : PTHREAD_STACK_MIN;
 	}
 
 	if (tls_phdr) {
