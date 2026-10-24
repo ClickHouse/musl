@@ -13,7 +13,13 @@ setjmp:
 	stp x23, x24, [x0,#32]
 	stp x25, x26, [x0,#48]
 	stp x27, x28, [x0,#64]
+	// Store the return address signed with sp as the modifier, so that one
+	// overwritten in the jmp_buf fails authentication in longjmp. longjmp
+	// restores this same sp before authenticating. paciasp and autiasp are
+	// in the hint space and execute as nops on cores without FEAT_PAuth.
+	paciasp
 	stp x29, x30, [x0,#80]
+	autiasp
 	mov x2, sp
 	str x2, [x0,#104]
 	stp  d8,  d9, [x0,#112]
