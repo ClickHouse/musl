@@ -120,5 +120,25 @@ void __pthread_current_tsd_range(void **begin, void **end)
 	*end = (void *)((char *)tsd + __pthread_tsd_size);
 }
 
+/* Bounds of the calling thread's struct pthread. The sanitizer runtime resets
+ * the shadow memory of a starting thread's stack and static TLS block, but
+ * musl allocates the stack, the TLS image and the tsd array in one mapping
+ * with internal __mmap/__munmap/__unmapself calls that the runtime does not
+ * see, so a mapping recycled for a new thread keeps the previous thread's
+ * shadow for everything outside those two ranges. On TLS_ABOVE_TP targets
+ * (aarch64) struct pthread sits just below the thread pointer, outside the
+ * static TLS block, and its errno_val then shows up as a data race between
+ * the exited and the new thread (seen with TSan: Rust std reading errno after
+ * a tokio blocking-pool thread was replaced). Exposing the descriptor range
+ * lets GetTls include it, the same way ThreadDescriptorSize() does for glibc.
+ *
+ * Same placement rationale and status as __pthread_current_tsd_range. */
+void __pthread_current_thread_range(void **begin, void **end)
+{
+	pthread_t self = __pthread_self();
+	*begin = (void *)self;
+	*end = (void *)(self + 1);
+}
+
 weak_alias(__pthread_key_create, pthread_key_create);
 weak_alias(__pthread_key_delete, pthread_key_delete);
