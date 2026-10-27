@@ -70,7 +70,15 @@ int __pthread_mutex_timedlock(pthread_mutex_t *restrict m, const struct timespec
 	int spins = 100;
 	while (spins-- && m->_m_lock && !m->_m_waiters) a_spin();
 
-	while ((r=__pthread_mutex_trylock(m)) == EBUSY) {
+	/* A normal mutex is taken here in the contended state (with the high bit of the lock
+	 * word set), as the threads that wait for it may sleep: its unlock wakes one of them
+	 * only in that state and does not look at _m_waiters. Counting _m_waiters instead
+	 * wakes a thread on every unlock while any thread is registered as a waiter, including
+	 * the ones that were already woken and have not run yet, which under contention makes
+	 * most of the wakes useless. */
+	while ((r = (type&15) == PTHREAD_MUTEX_NORMAL
+			? a_cas(&m->_m_lock, 0, EBUSY|0x80000000) & EBUSY
+			: __pthread_mutex_trylock(m)) == EBUSY) {
 		r = m->_m_lock;
 		int own = r & 0x3fffffff;
 		if (!own && (!r || (type&4)))

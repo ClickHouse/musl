@@ -44,6 +44,9 @@ int __pthread_mutex_unlock(pthread_mutex_t *m)
 		self->robust_list.pending = 0;
 		__vm_unlock();
 	}
+	/* The threads that wait for a normal mutex keep its lock word in the contended state
+	 * (see pthread_mutex_timedlock.c and pthread_cond_timedwait.c). */
+	if (type == PTHREAD_MUTEX_NORMAL) waiters = 0;
 	if (waiters || cont<0)
 		__wake(&m->_m_lock, 1, priv);
 	return 0;
