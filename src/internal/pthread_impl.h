@@ -168,6 +168,7 @@ hidden int __set_thread_area(void *);
 hidden int __libc_sigaction(int, const struct sigaction *, struct sigaction *);
 hidden void __unmapself(void *, size_t);
 
+hidden int __pthread_mutex_lock_contended(pthread_mutex_t *);
 hidden int __timedwait(volatile int *, int, clockid_t, const struct timespec *, int);
 hidden int __timedwait_cp(volatile int *, int, clockid_t, const struct timespec *, int);
 hidden void __wait(volatile int *, volatile int *, int, int);

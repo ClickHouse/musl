@@ -97,4 +97,24 @@ int __pthread_mutex_timedlock(pthread_mutex_t *restrict m, const struct timespec
 	return r;
 }
 
+/* Takes a normal mutex, and only in the contended state. The thread that calls this may have
+ * consumed the wake of an unlock while other threads still sleep on the mutex: those are woken
+ * only by an unlock in the contended state, so the uncontended fast path of pthread_mutex_lock
+ * must not be used here, or the sleepers would never be woken. */
+int __pthread_mutex_lock_contended(pthread_mutex_t *m)
+{
+	int r, t, priv = (m->_m_type & 128) ^ 128;
+
+	while (a_cas(&m->_m_lock, 0, EBUSY|0x80000000)) {
+		r = m->_m_lock;
+		if (!r) continue;
+		a_inc(&m->_m_waiters);
+		t = r | 0x80000000;
+		a_cas(&m->_m_lock, r, t);
+		__timedwait(&m->_m_lock, t, CLOCK_REALTIME, 0, priv);
+		a_dec(&m->_m_waiters);
+	}
+	return 0;
+}
+
 weak_alias(__pthread_mutex_timedlock, pthread_mutex_timedlock);
