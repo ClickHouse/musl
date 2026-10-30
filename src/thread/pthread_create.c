@@ -346,8 +346,23 @@ int __pthread_create(pthread_t *restrict res, const pthread_attr_t *restrict att
 	/* Setup argument structure for the new thread on its stack.
 	 * It's safe to access from the caller only until the thread
 	 * list is unlocked. */
-	stack -= (uintptr_t)stack % sizeof(uintptr_t);
 	stack -= sizeof(struct start_args);
+	/* Put the initial stack pointer of the thread at a fixed offset from a
+	 * cache line, the one glibc uses: its stack top is aligned to 64 bytes,
+	 * and start_thread enters the start function with a 152-byte frame, so
+	 * the function sees sp == 24 (mod 64). Here __clone rounds the pointer
+	 * down to 16 and the start function is entered 24 bytes below it on
+	 * x86_64 (the argument slot, the frame of start and the return address),
+	 * so the pointer is placed at 48 (mod 64). The ABI only promises
+	 * 16-byte alignment, so compilers spill 32-byte vector registers with
+	 * unaligned stores; whether such a spill straddles a cache line depends
+	 * on the actual alignment of the stack, and a straddling store cannot
+	 * be forwarded to a later load. Without this the alignment followed
+	 * libc.tls_size and changed from one build of the program to the next:
+	 * in one build every thread of a thread pool ran with sp == 16 (mod 32)
+	 * and a loop that passed 256-bit integers by value spent 40% more cycles
+	 * than under glibc, with a split store on every other spill. */
+	stack = (void *)(((uintptr_t)stack & -64) - 16);
 	struct start_args *args = (void *)stack;
 	args->start_func = entry;
 	args->start_arg = arg;
