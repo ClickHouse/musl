@@ -7,8 +7,10 @@
 
 /* Restartable sequences (kernel >= 4.18). Only the kernel-maintained
  * cpu_id field is used, to make sched_getcpu a memory read instead of
- * a syscall (aarch64 has no vDSO getcpu). Critical sections are not
- * used, so rseq_cs stays 0 and the signature value is arbitrary.
+ * a syscall (aarch64 has no vDSO getcpu). The libc runs no critical
+ * sections itself, but external consumers (e.g. librseq) find the area
+ * through __rseq_offset / __rseq_size / __rseq_flags and run theirs on
+ * it, so the signature must be the standard per-arch one (see RSEQ_SIG).
  *
  * This is the original 32-byte ABI; newer kernels accept extended
  * sizes but always support 32. The area must be aligned to 32 and
@@ -32,7 +34,20 @@ struct k_rseq {
 };
 
 #define RSEQ_ABI_SIZE 32
+
+/* Per-arch abort signature, matching glibc and librseq, so rseq critical
+ * sections assembled against their headers can run on an area we registered:
+ * the kernel delivers SIGSEGV on an abort whose signature differs from the
+ * registered one. On aarch64 the value doubles as a trapping instruction
+ * (BRK #0x45E0) placed right before each abort handler. */
+#if defined(__x86_64__)
 #define RSEQ_SIG 0x53053053
+#elif defined(__aarch64__)
+#define RSEQ_SIG 0xd428bc00
+#else
+#error "no rseq abort signature defined for this architecture"
+#endif
+
 #define RSEQ_FLAG_UNREGISTER 1
 
 /* glibc-compatible cpu_id sentinels. The kernel only ever stores
