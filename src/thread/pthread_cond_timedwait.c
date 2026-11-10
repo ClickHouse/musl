@@ -155,7 +155,17 @@ relock:
 	/* Errors locking the mutex override any existing error or
 	 * cancellation, since the caller must see them to know the
 	 * state of the mutex. */
-	if ((tmp = pthread_mutex_lock(m))) e = tmp;
+	/* A signaled waiter may have been requeued from its barrier to the mutex and woken by
+	 * an unlock of the mutex, so other threads may still sleep on the mutex: take a normal
+	 * mutex in the contended state, so that its unlock wakes one of them (see
+	 * pthread_mutex_unlock.c). The uncontended fast path of pthread_mutex_lock must not be
+	 * used even as a fallback: a waiter that took the mutex through it after another thread
+	 * had briefly held it would unlock without a wake, and the sleepers would be lost. */
+	if (oldstate != WAITING && (m->_m_type&15) == PTHREAD_MUTEX_NORMAL)
+		tmp = __pthread_mutex_lock_contended(m);
+	else
+		tmp = pthread_mutex_lock(m);
+	if (tmp) e = tmp;
 
 	if (oldstate == WAITING) goto done;
 
