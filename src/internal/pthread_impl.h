@@ -59,10 +59,11 @@ struct pthread {
 	char *dlerror_buf;
 	void *stdio_locks;
 	/* rseq registration state and area for sched_getcpu (see
-	 * src/internal/rseq.h). The buffer is over-sized so a 32-aligned
-	 * kernel rseq area fits at any struct alignment. */
+	 * src/internal/rseq.h). The buffer is over-sized so a kernel rseq
+	 * area of up to RSEQ_AREA_CAP bytes at RSEQ_AREA_ALIGN alignment
+	 * fits at any struct alignment. */
 	int rseq_state;
-	unsigned char rseq_area_buf[63];
+	unsigned char rseq_area_buf[127];
 
 	/* Part 3 -- the positions of these fields relative to
 	 * the end of the structure is external and internal ABI. */
