@@ -97,8 +97,21 @@ int __pthread_cond_timedwait(pthread_cond_t *restrict c, pthread_mutex_t *restri
 	__pthread_setcancelstate(PTHREAD_CANCEL_MASKED, &cs);
 	if (cs == PTHREAD_CANCEL_DISABLE) __pthread_setcancelstate(cs, 0);
 
-	do e = __timedwait_cp(fut, seq, clock, ts, !shared);
-	while (*fut==seq && (!e || e==EINTR));
+	/* Spin briefly before sleeping on the futex, the same way __wait
+	 * does for internal locks. In producer-consumer patterns (e.g.
+	 * thread pools) the signal often arrives within the spin window,
+	 * and the waiter then skips the FUTEX_WAIT syscall and, more
+	 * importantly, the scheduler wakeup latency. The waiter is already
+	 * on the list at this point, so this only shortens the window
+	 * between signal and wakeup; correctness is unaffected. If the
+	 * value already changed, the wait loop is skipped entirely, which
+	 * is equivalent to the signal winning the race against the wait. */
+	int spins = 100;
+	while (spins-- && *fut==seq) a_spin();
+
+	e = 0;
+	while (*fut==seq && (!e || e==EINTR))
+		e = __timedwait_cp(fut, seq, clock, ts, !shared);
 	if (e == EINTR) e = 0;
 
 	if (shared) {
