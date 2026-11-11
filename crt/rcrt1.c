@@ -45,7 +45,8 @@ static void protect_relro(unsigned char *base, size_t *sp)
 	}
 }
 
-hidden void __dls2(unsigned char *base, size_t *sp)
+/* Used: referenced only from the inline assembly in _dlstart_c, which LTO cannot see. */
+hidden __attribute__((used)) void __dls2(unsigned char *base, size_t *sp)
 {
 	protect_relro(base, sp);
 	__libc_start_main(main, *sp, (void *)(sp+1), _init, _fini, 0);
