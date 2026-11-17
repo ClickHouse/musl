@@ -7,21 +7,13 @@
 #include "rseq.h"
 
 #ifdef VDSO_GETCPU_SYM
-
-static void *volatile vdso_func;
-
-typedef long (*getcpu_f)(unsigned *, unsigned *, void *);
-
-static long getcpu_init(unsigned *cpu, unsigned *node, void *unused)
+/* Not checked by CFI: the target is in the vDSO, and its address is
+ * read-only (see vdso.c). */
+no_cfi_icall
+static long vdso_getcpu(void *f, unsigned *cpu, unsigned *node, void *unused)
 {
-	void *p = __vdsosym(VDSO_GETCPU_VER, VDSO_GETCPU_SYM);
-	getcpu_f f = (getcpu_f)p;
-	a_cas_p(&vdso_func, (void *)getcpu_init, p);
-	return f ? f(cpu, node, unused) : -ENOSYS;
+	return ((long (*)(unsigned *, unsigned *, void *))f)(cpu, node, unused);
 }
-
-static void *volatile vdso_func = (void *)getcpu_init;
-
 #endif
 
 int sched_getcpu(void)
@@ -41,9 +33,9 @@ int sched_getcpu(void)
 	}
 
 #ifdef VDSO_GETCPU_SYM
-	getcpu_f f = (getcpu_f)vdso_func;
+	void *f = __vdso_funcs->getcpu;
 	if (f) {
-		r = f(&cpu, 0, 0);
+		r = vdso_getcpu(f, &cpu, 0, 0);
 		if (!r) return cpu;
 		if (r != -ENOSYS) return __syscall_ret(r);
 	}
