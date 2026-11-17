@@ -17,6 +17,9 @@ weak_alias(dummy, _fini);
 
 extern weak hidden void (*const __fini_array_start)(void), (*const __fini_array_end)(void);
 
+/* Not checked by CFI: the destructors in the fini array are called through
+ * a type that need not be the one they were defined with. */
+no_cfi_icall
 static void libc_exit_fini(void)
 {
 	uintptr_t a = (uintptr_t)&__fini_array_end;

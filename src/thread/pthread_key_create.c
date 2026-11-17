@@ -74,6 +74,9 @@ int __pthread_key_delete(pthread_key_t k)
 	return 0;
 }
 
+/* Not checked by CFI: Rust std passes its destructor, which takes a u8
+ * pointer, as void (*)(void *) (https://github.com/rust-lang/rust/issues/166073). */
+no_cfi_icall
 void __pthread_tsd_run_dtors()
 {
 	pthread_t self = __pthread_self();

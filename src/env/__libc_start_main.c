@@ -56,6 +56,9 @@ void __init_libc(char **envp, char *pn)
 	libc.secure = 1;
 }
 
+/* Not checked by CFI: the constructors in the init array are called through
+ * a type that need not be the one they were defined with. */
+no_cfi_icall
 static void libc_start_init(void)
 {
 	_init();
@@ -86,6 +89,8 @@ int __libc_start_main(int (*main)(int,char **,char **), int argc, char **argv,
 	return stage2(main, argc, argv);
 }
 
+/* Not checked by CFI: main may be defined with fewer parameters. */
+no_cfi_icall
 static int libc_start_main_stage2(int (*main)(int,char **,char **), int argc, char **argv)
 {
 	char **envp = argv+argc+1;
