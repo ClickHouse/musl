@@ -7,6 +7,8 @@
 
 extern weak hidden const size_t _DYNAMIC[];
 
+/* A sanitizer runtime passes its own callback. */
+no_cfi_icall_runtime
 static int static_dl_iterate_phdr(int(*callback)(struct dl_phdr_info *info, size_t size, void *data), void *data)
 {
 	unsigned char *p;

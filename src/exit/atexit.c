@@ -24,6 +24,9 @@ static int slot;
 static volatile int lock[1];
 volatile int *const __atexit_lockptr = lock;
 
+/* Not checked by CFI: compilers register C++ destructors, whose parameter
+ * is the object type, as void (*)(void *). */
+no_cfi_icall
 void __funcs_on_exit()
 {
 	void (*func)(void *), *arg;
@@ -80,6 +83,8 @@ int __cxa_atexit(void (*func)(void *), void *arg, void *dso)
 	return 0;
 }
 
+/* A sanitizer runtime registers its own handlers. */
+no_cfi_icall_runtime
 static void call(void *p)
 {
 	((void (*)(void))(uintptr_t)p)();
