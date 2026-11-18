@@ -92,7 +92,10 @@ int getaddrinfo(const char *restrict host, const char *restrict serv, const stru
 		}
 		seen[0] = ctx.seen4;
 		seen[1] = ctx.seen6;
-		for (i=0; i<2; i++) {
+		/* As in glibc, a host with no non-loopback address of either
+		 * family does not narrow an AF_UNSPEC lookup; otherwise every
+		 * name, including "localhost", would fail on it. */
+		if (family != AF_UNSPEC || seen[0] || seen[1]) for (i=0; i<2; i++) {
 			if (family==tf[1-i]) continue;
 			if (seen[i]) continue;
 			if (family == tf[i]) no_family = 1;
