@@ -31,3 +31,4 @@ __memcpy_fwd:
 	jnz 2b
 1:	ret
 .cfi_endproc
+.size memcpy,.-memcpy

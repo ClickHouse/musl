@@ -25,3 +25,5 @@ __restore:
 __restore_rt:
 	mov x8,#139 // SYS_rt_sigreturn
 	svc 0
+.size __restore,.-__restore
+.size __restore_rt,.-__restore_rt

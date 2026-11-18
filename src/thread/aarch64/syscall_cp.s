@@ -38,3 +38,4 @@ __cp_end:
 __cp_cancel:
 	b __cancel
 .cfi_endproc
+.size __syscall_cp_asm,.-__syscall_cp_asm

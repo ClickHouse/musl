@@ -8,3 +8,4 @@ vfork:
 	mov %rax,%rdi
 	.hidden __syscall_ret
 	jmp __syscall_ret
+.size vfork,.-vfork

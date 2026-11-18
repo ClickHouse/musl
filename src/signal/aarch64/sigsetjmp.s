@@ -23,3 +23,5 @@ __sigsetjmp:
 
 .hidden __sigsetjmp_tail
 	b __sigsetjmp_tail
+.size sigsetjmp,.-sigsetjmp
+.size __sigsetjmp,.-__sigsetjmp

@@ -28,3 +28,6 @@ setjmp:
 	stp d14, d15, [x0,#160]
 	mov x0, #0
 	ret
+.size __setjmp,.-__setjmp
+.size _setjmp,.-_setjmp
+.size setjmp,.-setjmp

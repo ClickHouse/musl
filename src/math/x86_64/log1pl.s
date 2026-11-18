@@ -13,3 +13,4 @@ log1pl:
 	faddp
 	fyl2x
 	ret
+.size log1pl,.-log1pl

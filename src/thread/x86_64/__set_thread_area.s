@@ -9,3 +9,4 @@ __set_thread_area:
 	movl $158,%eax          /* set fs segment to */
 	syscall                 /* arch_prctl(SET_FS, arg)*/
 	ret
+.size __set_thread_area,.-__set_thread_area

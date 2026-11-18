@@ -29,3 +29,4 @@ __clone:
 	blr x1
 	mov x8,#93 // SYS_exit
 	svc #0
+.size __clone,.-__clone

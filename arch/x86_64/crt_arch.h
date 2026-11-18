@@ -10,4 +10,5 @@ START ": \n"
 "	lea _DYNAMIC(%rip),%rsi \n"
 "	andq $-16,%rsp \n"
 "	call " START "_c \n"
+".size " START ",.-" START " \n"
 );

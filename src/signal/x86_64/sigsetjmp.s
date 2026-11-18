@@ -22,3 +22,5 @@ __sigsetjmp:
 	jmp __sigsetjmp_tail
 
 1:	jmp setjmp@PLT
+.size sigsetjmp,.-sigsetjmp
+.size __sigsetjmp,.-__sigsetjmp

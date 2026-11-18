@@ -8,6 +8,7 @@
 __tlsdesc_static:
 	ldr x0,[x0,#8]
 	ret
+.size __tlsdesc_static,.-__tlsdesc_static
 
 // size_t __tlsdesc_dynamic(size_t *a)
 // {
@@ -29,3 +30,4 @@ __tlsdesc_dynamic:
 	add x0,x1,x2          // dtv[p->modidx] + p->off - tp
 	ldp x1,x2,[sp],#16
 	ret
+.size __tlsdesc_dynamic,.-__tlsdesc_dynamic

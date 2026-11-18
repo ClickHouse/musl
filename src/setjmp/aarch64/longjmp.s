@@ -23,3 +23,5 @@ longjmp:
 	cmp w1, 0
 	csinc w0, w1, wzr, ne
 	br x30
+.size _longjmp,.-_longjmp
+.size longjmp,.-longjmp

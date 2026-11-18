@@ -99,3 +99,4 @@ expl:
 	faddp
 1:	addq $48, %rsp
 	ret
+.size expl,.-expl

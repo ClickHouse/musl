@@ -26,6 +26,7 @@ expm1l:
 	fld1
 	fsubrp
 	ret
+.size expm1l,.-expm1l
 
 .global exp2l
 .type exp2l,@function
@@ -81,3 +82,4 @@ exp2l:
 	fmulp
 	add $16,%rsp
 	ret
+.size exp2l,.-exp2l

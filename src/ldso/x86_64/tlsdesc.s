@@ -5,6 +5,7 @@
 __tlsdesc_static:
 	mov 8(%rax),%rax
 	ret
+.size __tlsdesc_static,.-__tlsdesc_static
 
 .global __tlsdesc_dynamic
 .hidden __tlsdesc_dynamic
@@ -21,3 +22,4 @@ __tlsdesc_dynamic:
 	sub %fs:0,%rax
 	pop %rdx
 	ret
+.size __tlsdesc_dynamic,.-__tlsdesc_dynamic

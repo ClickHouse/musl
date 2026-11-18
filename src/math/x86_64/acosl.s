@@ -14,3 +14,4 @@ acosl:
 	fxch %st(1)
 	fpatan
 	ret
+.size acosl,.-acosl
