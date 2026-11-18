@@ -20,3 +20,6 @@ setjmp:
 	mov %rdx,56(%rdi)
 	xor %eax,%eax           /* always return 0 */
 	ret
+.size __setjmp,.-__setjmp
+.size _setjmp,.-_setjmp
+.size setjmp,.-setjmp

@@ -5,3 +5,4 @@
 dlsym:
 	mov (%rsp),%rdx
 	jmp __dlsym
+.size dlsym,.-dlsym

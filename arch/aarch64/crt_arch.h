@@ -12,4 +12,5 @@ START ":\n"
 "	add x1, x1, #:lo12:_DYNAMIC\n"
 "	and sp, x0, #-16\n"
 "	b " START "_c\n"
+".size " START ",.-" START "\n"
 );

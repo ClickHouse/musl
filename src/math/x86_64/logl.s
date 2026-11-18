@@ -5,3 +5,4 @@ logl:
 	fldt 8(%rsp)
 	fyl2x
 	ret
+.size logl,.-logl

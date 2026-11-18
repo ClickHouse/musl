@@ -21,3 +21,4 @@ memmove:
 	lea 1(%rdi),%rax
 	ret
 .cfi_endproc
+.size memmove,.-memmove

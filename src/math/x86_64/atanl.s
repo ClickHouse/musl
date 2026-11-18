@@ -5,3 +5,4 @@ atanl:
 	fld1
 	fpatan
 	ret
+.size atanl,.-atanl

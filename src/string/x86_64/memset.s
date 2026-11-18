@@ -77,3 +77,4 @@ memset:
 	add %rdx,%rdi
 	jmp 1b
 .cfi_endproc
+.size memset,.-memset

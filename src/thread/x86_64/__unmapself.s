@@ -8,3 +8,4 @@ __unmapself:
 	xor %rdi,%rdi   /* exit() args: always return success */
 	movl $60,%eax   /* SYS_exit */
 	syscall         /* exit(0) */
+.size __unmapself,.-__unmapself

@@ -5,3 +5,4 @@ atan2l:
 	fldt 24(%rsp)
 	fpatan
 	ret
+.size atan2l,.-atan2l

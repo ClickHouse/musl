@@ -16,3 +16,5 @@ longjmp:
 	mov 40(%rdi),%r15
 	mov 48(%rdi),%rsp
 	jmp *56(%rdi)           /* goto saved address without altering rsp */
+.size _longjmp,.-_longjmp
+.size longjmp,.-longjmp

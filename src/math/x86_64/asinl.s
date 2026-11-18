@@ -10,3 +10,4 @@ asinl:
 	fsqrt
 	fpatan
 	ret
+.size asinl,.-asinl

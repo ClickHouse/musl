@@ -5,3 +5,4 @@ __unmapself:
 	svc 0
 	mov x8,#93 // SYS_exit
 	svc 0
+.size __unmapself,.-__unmapself

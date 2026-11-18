@@ -11,6 +11,7 @@ floorl:
 	mov %ah,9(%rsp)
 	fldcw 8(%rsp)
 	ret
+.size floorl,.-floorl
 
 .global ceill
 .type ceill,@function
@@ -18,6 +19,7 @@ ceill:
 	fldt 8(%rsp)
 	mov $0xb,%al
 	jmp 1b
+.size ceill,.-ceill
 
 .global truncl
 .type truncl,@function
@@ -25,3 +27,4 @@ truncl:
 	fldt 8(%rsp)
 	mov $0xf,%al
 	jmp 1b
+.size truncl,.-truncl

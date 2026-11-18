@@ -18,6 +18,7 @@ feclearexcept:
 	ldmxcsr -8(%rsp)
 1:	xor %eax,%eax
 	ret
+.size feclearexcept,.-feclearexcept
 
 .global feraiseexcept
 .type feraiseexcept,@function
@@ -28,6 +29,7 @@ feraiseexcept:
 	ldmxcsr -8(%rsp)
 	xor %eax,%eax
 	ret
+.size feraiseexcept,.-feraiseexcept
 
 .global __fesetround
 .hidden __fesetround
@@ -47,6 +49,7 @@ __fesetround:
 	ldmxcsr (%rsp)
 	pop %rcx
 	ret
+.size __fesetround,.-__fesetround
 
 .global fegetround
 .type fegetround,@function
@@ -57,6 +60,7 @@ fegetround:
 	shr $3,%eax
 	and $0xc00,%eax
 	ret
+.size fegetround,.-fegetround
 
 .global fegetenv
 .type fegetenv,@function
@@ -65,6 +69,7 @@ fegetenv:
 	fnstenv (%rdi)
 	stmxcsr 28(%rdi)
 	ret
+.size fegetenv,.-fegetenv
 
 .global fesetenv
 .type fesetenv,@function
@@ -84,6 +89,7 @@ fesetenv:
 	ldmxcsr (%rsp)
 	add $40,%rsp
 	ret
+.size fesetenv,.-fesetenv
 
 .global fetestexcept
 .type fetestexcept,@function
@@ -96,3 +102,4 @@ fetestexcept:
 	or %esi,%eax
 	and %edi,%eax
 	ret
+.size fetestexcept,.-fetestexcept

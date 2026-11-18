@@ -7,3 +7,4 @@ vfork:
 	svc 0
 	.hidden __syscall_ret
 	b __syscall_ret
+.size vfork,.-vfork
