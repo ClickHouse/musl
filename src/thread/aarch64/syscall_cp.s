@@ -15,6 +15,7 @@
 .hidden __syscall_cp_asm
 .type __syscall_cp_asm,%function
 __syscall_cp_asm:
+	hint #34 // bti c
 // The default CFI rules (CFA = sp on entry, return address in x30) hold
 // throughout: the function touches neither sp nor x30. Without an unwind
 // table entry, a stack trace taken while a thread is blocked in the syscall -
@@ -39,3 +40,17 @@ __cp_cancel:
 	b __cancel
 .cfi_endproc
 .size __syscall_cp_asm,.-__syscall_cp_asm
+
+// The BTI property (GNU_PROPERTY_AARCH64_FEATURE_1_AND): the linker enables BTI for an executable
+// only if every input object has it. With the `bti c` landing pads at the function entries above,
+// this code is valid with BTI enforced; both are no-ops for builds and CPUs without BTI.
+.section .note.gnu.property,"a"
+.p2align 3
+.word 4
+.word 16
+.word 5
+.asciz "GNU"
+.word 0xc0000000
+.word 4
+.word 1
+.word 0

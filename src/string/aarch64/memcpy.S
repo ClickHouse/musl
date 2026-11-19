@@ -59,6 +59,7 @@
 .type memcpy,%function
 memmove:
 memcpy:
+	hint #34 // bti c
 
 // Leaf function that never touches sp or x30, so the default unwind rules
 // (CFA = sp, return address in x30) hold at every instruction and this bare
@@ -251,3 +252,17 @@ memcpy:
 .cfi_endproc
 .size memcpy,.-memcpy
 .size memmove,.-memmove
+
+// The BTI property (GNU_PROPERTY_AARCH64_FEATURE_1_AND): the linker enables BTI for an executable
+// only if every input object has it. With the `bti c` landing pads at the function entries above,
+// this code is valid with BTI enforced; both are no-ops for builds and CPUs without BTI.
+.section .note.gnu.property,"a"
+.p2align 3
+.word 4
+.word 16
+.word 5
+.asciz "GNU"
+.word 0xc0000000
+.word 4
+.word 1
+.word 0
