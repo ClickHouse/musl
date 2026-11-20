@@ -478,6 +478,13 @@ pid_t gettid(void);
 #define _CS_POSIX_V7_THREADS_CFLAGS	1150
 #define _CS_POSIX_V7_THREADS_LDFLAGS	1151
 
+/* The file descriptors visible to the program are a pseudorandom encoding of the kernel
+ * descriptors (see src/internal/fdmap.h). These convert them for code that bypasses libc:
+ * __musl_fd_to_kernel returns -1 if the descriptor is not open, __musl_fd_from_kernel
+ * returns the descriptor of the program for an existing kernel descriptor. */
+int __musl_fd_to_kernel(int);
+int __musl_fd_from_kernel(int);
+
 #ifdef __cplusplus
 }
 #endif
