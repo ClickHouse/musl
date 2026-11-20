@@ -19,20 +19,19 @@
 .hidden __restore
 .type __restore,%function
 __restore:
-	hint #34 // bti c
 .global __restore_rt
 .hidden __restore_rt
 .type __restore_rt,%function
 __restore_rt:
-	hint #34 // bti c
 	mov x8,#139 // SYS_rt_sigreturn
 	svc 0
 .size __restore,.-__restore
 .size __restore_rt,.-__restore_rt
 
 // The BTI property (GNU_PROPERTY_AARCH64_FEATURE_1_AND): the linker enables BTI for an executable
-// only if every input object has it. With the `bti c` landing pads at the function entries above,
-// this code is valid with BTI enforced; both are no-ops for builds and CPUs without BTI.
+// only if every input object has it. The restorers need no landing pad: a signal handler returns to
+// them with `ret`, which BTI does not check. They must not get one either: unwinders (libunwind, gdb)
+// recognize a signal frame by these exact two instructions at the return address.
 .section .note.gnu.property,"a"
 .p2align 3
 .word 4
