@@ -331,48 +331,13 @@ static long do_poll(long n, long a, long b, long c, long d, long e, int cp)
 	return r;
 }
 
-/* select works only for kernel descriptors below FD_SETSIZE, like it does without the
- * translation. The program-visible descriptors are large, so the caller needs fd_set
- * arrays of the size of the largest descriptor. */
+/* fd_set is a bitmap of kernel descriptors (see sys/select.h): the sets are passed as is.
+ * The number of descriptors given by the program is the largest program-visible
+ * descriptor plus one, which says nothing about the kernel ones. */
 static long do_select(long n, long a, long b, long c, long d, long e, long f, int cp)
 {
-	enum { BITS = 8 * sizeof(unsigned long) };
-	int nfds = a, knfds = 0, s, k;
-	unsigned long *user[3] = { (unsigned long *)b, (unsigned long *)c, (unsigned long *)d };
-	fd_set kernel[3];
-	int user_fd[FD_SETSIZE];
-	size_t words, w;
-	long r;
-	if (nfds <= 3) return raw(n, a, b, c, d, e, f, cp);
-	words = ((size_t)nfds + BITS - 1) / BITS;
-	for (s = 0; s < 3; s++) {
-		if (!user[s]) continue;
-		FD_ZERO(&kernel[s]);
-		for (w = 0; w < words; w++) {
-			unsigned long x = user[s][w];
-			if (w == words - 1 && nfds % BITS) x &= (1ul << (nfds % BITS)) - 1;
-			while (x) {
-				int u = w * BITS + __builtin_ctzl(x), kfd = __fdmap_kernel(u);
-				x &= x - 1;
-				if (kfd < 0) return -EBADF;
-				if (kfd >= FD_SETSIZE) return -EINVAL;
-				FD_SET(kfd, &kernel[s]);
-				user_fd[kfd] = u;
-				if (kfd >= knfds) knfds = kfd + 1;
-			}
-		}
-	}
-	r = raw(n, knfds, user[0] ? (long)&kernel[0] : 0, user[1] ? (long)&kernel[1] : 0,
-	        user[2] ? (long)&kernel[2] : 0, e, f, cp);
-	if (r < 0) return r;
-	for (s = 0; s < 3; s++) {
-		if (!user[s]) continue;
-		for (w = 0; w < words; w++) user[s][w] = 0;
-		for (k = 0; k < knfds; k++)
-			if (FD_ISSET(k, &kernel[s]))
-				user[s][user_fd[k] / BITS] |= 1ul << (user_fd[k] % BITS);
-	}
-	return r;
+	if (a > 3) a = FD_SETSIZE;
+	return raw(n, a, b, c, d, e, f, cp);
 }
 
 static size_t cmsg_count_fds(struct msghdr *m)
@@ -680,12 +645,7 @@ hidden long __fdmap_syscall(long n, long a, long b, long c, long d, long e, long
 
 int __musl_fd_to_kernel(int fd)
 {
-	int kfd = __fdmap_kernel(fd);
-	if (fd >= 0 && kfd < 0) {
-		errno = EBADF;
-		return -1;
-	}
-	return kfd;
+	return __fdmap_kernel(fd);
 }
 
 int __musl_fd_from_kernel(int kfd)
