@@ -61,5 +61,7 @@ int clone(int (*func)(void *), void *stack, int flags, void *arg, ...)
 
 	__post_Fork(ret);
 	__restore_sigs(&csa.sigmask);
+	/* The kernel stores the descriptor of CLONE_PIDFD, see fdmap.c. */
+	if (ret > 0 && (flags & CLONE_PIDFD)) *ptid = __fdmap_new_fd(*ptid);
 	return __syscall_ret(ret);
 }

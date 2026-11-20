@@ -5,6 +5,6 @@ vfork:
 	mov x0, 0x4111 // SIGCHLD | CLONE_VM | CLONE_VFORK
 	mov x1, 0
 	svc 0
-	.hidden __syscall_ret
-	b __syscall_ret
+	.hidden __fdmap_vfork_ret
+	b __fdmap_vfork_ret
 .size vfork,.-vfork

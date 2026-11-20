@@ -41,7 +41,21 @@ hidden long __syscall_ret(unsigned long),
 #define __SYSCALL_CONCAT(a,b) __SYSCALL_CONCAT_X(a,b)
 #define __SYSCALL_DISP(b,...) __SYSCALL_CONCAT(b,__SYSCALL_NARGS(__VA_ARGS__))(__VA_ARGS__)
 
-#define __syscall(...) __SYSCALL_DISP(__syscall,__VA_ARGS__)
+/* Syscalls with file descriptors translated, see fdmap.h. */
+#include "fdmap.h"
+
+#define __fdmap_sc0(n) (__fdmap_kind(n) ? __fdmap_syscall(n,0,0,0,0,0,0,0) : __syscall0(n))
+#define __fdmap_sc1(n,a) (__fdmap_kind(n) ? __fdmap_syscall(n,__scc(a),0,0,0,0,0,0) : __syscall1(n,a))
+#define __fdmap_sc2(n,a,b) (__fdmap_kind(n) ? __fdmap_syscall(n,__scc(a),__scc(b),0,0,0,0,0) : __syscall2(n,a,b))
+#define __fdmap_sc3(n,a,b,c) (__fdmap_kind(n) ? __fdmap_syscall(n,__scc(a),__scc(b),__scc(c),0,0,0,0) : __syscall3(n,a,b,c))
+#define __fdmap_sc4(n,a,b,c,d) (__fdmap_kind(n) ? __fdmap_syscall(n,__scc(a),__scc(b),__scc(c),__scc(d),0,0,0) : __syscall4(n,a,b,c,d))
+#define __fdmap_sc5(n,a,b,c,d,e) (__fdmap_kind(n) ? __fdmap_syscall(n,__scc(a),__scc(b),__scc(c),__scc(d),__scc(e),0,0) : __syscall5(n,a,b,c,d,e))
+#define __fdmap_sc6(n,a,b,c,d,e,f) (__fdmap_kind(n) ? __fdmap_syscall(n,__scc(a),__scc(b),__scc(c),__scc(d),__scc(e),__scc(f),0) : __syscall6(n,a,b,c,d,e,f))
+
+/* Syscalls with kernel file descriptors. */
+#define __syscall_raw(...) __SYSCALL_DISP(__syscall,__VA_ARGS__)
+
+#define __syscall(...) __SYSCALL_DISP(__fdmap_sc,__VA_ARGS__)
 #define syscall(...) __syscall_ret(__syscall(__VA_ARGS__))
 
 #define socketcall(nm,a,b,c,d,e,f) __syscall_ret(__socketcall(nm,a,b,c,d,e,f))
@@ -374,13 +388,13 @@ static inline long __alt_socketcall(int sys, int sock, int cp, syscall_arg_t a, 
 #endif
 
 #ifdef SYS_open
-#define __sys_open2(x,pn,fl) __syscall2(SYS_open, pn, (fl)|O_LARGEFILE)
-#define __sys_open3(x,pn,fl,mo) __syscall3(SYS_open, pn, (fl)|O_LARGEFILE, mo)
+#define __sys_open2(x,pn,fl) __fdmap_sc2(SYS_open, pn, (fl)|O_LARGEFILE)
+#define __sys_open3(x,pn,fl,mo) __fdmap_sc3(SYS_open, pn, (fl)|O_LARGEFILE, mo)
 #define __sys_open_cp2(x,pn,fl) __syscall_cp2(SYS_open, pn, (fl)|O_LARGEFILE)
 #define __sys_open_cp3(x,pn,fl,mo) __syscall_cp3(SYS_open, pn, (fl)|O_LARGEFILE, mo)
 #else
-#define __sys_open2(x,pn,fl) __syscall3(SYS_openat, AT_FDCWD, pn, (fl)|O_LARGEFILE)
-#define __sys_open3(x,pn,fl,mo) __syscall4(SYS_openat, AT_FDCWD, pn, (fl)|O_LARGEFILE, mo)
+#define __sys_open2(x,pn,fl) __fdmap_sc3(SYS_openat, AT_FDCWD, pn, (fl)|O_LARGEFILE)
+#define __sys_open3(x,pn,fl,mo) __fdmap_sc4(SYS_openat, AT_FDCWD, pn, (fl)|O_LARGEFILE, mo)
 #define __sys_open_cp2(x,pn,fl) __syscall_cp3(SYS_openat, AT_FDCWD, pn, (fl)|O_LARGEFILE)
 #define __sys_open_cp3(x,pn,fl,mo) __syscall_cp4(SYS_openat, AT_FDCWD, pn, (fl)|O_LARGEFILE, mo)
 #endif
