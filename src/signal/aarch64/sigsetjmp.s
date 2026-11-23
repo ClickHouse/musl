@@ -15,6 +15,9 @@ __sigsetjmp:
 	mov x19,x0
 
 	bl setjmp
+	// `longjmp` returns here with `br x30`: with BTI, the return site of `setjmp` needs a `bti j`
+	// landing pad, which the compiler inserts after calls to `setjmp` in C but not here.
+	hint #36 // bti j
 
 	mov w1,w0
 	mov x0,x19
