@@ -15,7 +15,6 @@
 .hidden __syscall_cp_asm
 .type __syscall_cp_asm,%function
 __syscall_cp_asm:
-	hint #34 // bti c
 // The default CFI rules (CFA = sp on entry, return address in x30) hold
 // throughout: the function touches neither sp nor x30. Without an unwind
 // table entry, a stack trace taken while a thread is blocked in the syscall -
@@ -23,6 +22,7 @@ __syscall_cp_asm:
 // syscall, e.g. clock_nanosleep under sleep() - falls apart right after this
 // frame and never reaches the calling application code.
 .cfi_startproc
+	hint #34 // bti c
 __cp_begin:
 	ldr w0,[x0]
 	cbnz w0,__cp_cancel

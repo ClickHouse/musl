@@ -59,7 +59,6 @@
 .type memcpy,%function
 memmove:
 memcpy:
-	hint #34 // bti c
 
 // Leaf function that never touches sp or x30, so the default unwind rules
 // (CFA = sp, return address in x30) hold at every instruction and this bare
@@ -68,6 +67,7 @@ memcpy:
 // landing in one of the hottest functions lose the entire caller chain.
 // Upstream ARM optimized-routines emits the same via its ENTRY/END macros.
 .cfi_startproc
+	hint #34 // bti c
 	add     srcend, src, count
 	add     dstend, dstin, count
 	cmp     count, 128
