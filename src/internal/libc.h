@@ -27,6 +27,7 @@ struct __libc {
 	struct tls_module *tls_head;
 	size_t tls_size, tls_align, tls_cnt;
 	size_t page_size;
+	size_t thread_stack_gap;
 	struct __locale_struct global_locale;
 };
 

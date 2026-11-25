@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include "syscall.h"
 #include "atomic.h"
 #include "libc.h"
@@ -16,6 +17,23 @@ static void dummy1(void *p) {}
 weak_alias(dummy1, __init_ssp);
 
 #define AUX_CNT 38
+
+/* MUSL_THREAD_STACK_GAP=<bytes>, below 4096: leave that many bytes (rounded
+ * down to 64) unused at the top of the stack mapping of each new thread, so
+ * its TLS and stack start that much lower in their pages, like with the
+ * static TLS surplus of glibc (glibc.rtld.optional_static_tls). The mapping
+ * grows by a page, so the stack is not smaller. The speed of some code
+ * depends on where the stacks sit in their pages, and a benchmark can compare
+ * builds at several placements. Any other value is ignored. */
+static void init_thread_stack_gap(void)
+{
+	const char *s = getenv("MUSL_THREAD_STACK_GAP");
+	size_t n = 0;
+	if (!s || !*s) return;
+	for (; *s>='0' && *s<='9' && n<4096; s++) n = 10*n + (*s-'0');
+	if (*s || n>=4096) return;
+	libc.thread_stack_gap = n & -64;
+}
 
 #ifdef __GNUC__
 __attribute__((__noinline__))
@@ -40,7 +58,10 @@ void __init_libc(char **envp, char *pn)
 	__init_ssp((void *)aux[AT_RANDOM]);
 
 	if (aux[AT_UID]==aux[AT_EUID] && aux[AT_GID]==aux[AT_EGID]
-		&& !aux[AT_SECURE]) return;
+		&& !aux[AT_SECURE]) {
+		init_thread_stack_gap();
+		return;
+	}
 
 	struct pollfd pfd[3] = { {.fd=0}, {.fd=1}, {.fd=2} };
 	int r =
