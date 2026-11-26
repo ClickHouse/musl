@@ -59,6 +59,54 @@ static int start_tcp(struct pollfd *pfd, int family, const void *sa, socklen_t s
 	return -1;
 }
 
+/* Errors that mean the nameserver cannot be reached at all, either
+ * reported synchronously by sendto or asynchronously by ICMP. Other
+ * errors, such as ENOBUFS or EMSGSIZE, are transient or specific to
+ * one packet, and are left to the timeout. */
+static int is_unreachable(int err)
+{
+	switch (err) {
+	case ECONNREFUSED:
+	case EHOSTUNREACH:
+	case ENETUNREACH:
+	case EHOSTDOWN:
+	case ENETDOWN:
+	case EADDRNOTAVAIL:
+		return 1;
+	}
+	return 0;
+}
+
+/* Find the nameserver with the address and port of sa, or return nns.
+ * Unlike for replies, this does not compare the whole sockaddr, because
+ * the kernel does not fill the address of an error the same way. */
+static int find_ns(const union sa *sa, const union sa *ns, int nns, int family)
+{
+	int j;
+	for (j=0; j<nns; j++) {
+		if (family == AF_INET6) {
+			if (sa->sin6.sin6_family == AF_INET6
+			    && sa->sin6.sin6_port == ns[j].sin6.sin6_port
+			    && !memcmp(&sa->sin6.sin6_addr, &ns[j].sin6.sin6_addr, 16))
+				break;
+		} else {
+			if (sa->sin.sin_family == AF_INET
+			    && sa->sin.sin_port == ns[j].sin.sin_port
+			    && sa->sin.sin_addr.s_addr == ns[j].sin.sin_addr.s_addr)
+				break;
+		}
+	}
+	return j;
+}
+
+/* Layout of struct sock_extended_err from the Linux uapi header
+ * linux/errqueue.h, which is not part of the libc headers. */
+struct ee {
+	uint32_t ee_errno;
+	uint8_t ee_origin, ee_type, ee_code, ee_pad;
+	uint32_t ee_info, ee_data;
+};
+
 static void step_mh(struct msghdr *mh, size_t n)
 {
 	/* Adjust iovec in msghdr to skip first n bytes. */
@@ -82,10 +130,9 @@ int __res_msend_rc(int nqueries, const unsigned char *const *queries,
 {
 	int fd;
 	int timeout, attempts, retry_interval, servfail_retry;
-	union {
-		struct sockaddr_in6 sin6;
-		struct sockaddr_in sin;
-	} sa = {0}, ns[MAXNS] = {{0}};
+	union sa sa = {0}, ns[MAXNS] = {{0}};
+	unsigned char ns_dead[MAXNS] = {0};
+	int ndead = 0;
 	socklen_t sl = sizeof sa.sin;
 	int nns = 0;
 	int family = AF_INET;
@@ -151,6 +198,16 @@ int __res_msend_rc(int nqueries, const unsigned char *const *queries,
 		}
 	}
 
+	/* Ask for ICMP errors on the unconnected socket, so that a nameserver
+	 * which is not listening, such as a local stub resolver inside a
+	 * network namespace, is reported right away instead of only by the
+	 * timeout. IPv4 errors on an IPv6 socket need IP_RECVERR too. */
+	if (fd >= 0) {
+		setsockopt(fd, IPPROTO_IP, IP_RECVERR, &(int){1}, sizeof(int));
+		if (family == AF_INET6)
+			setsockopt(fd, IPPROTO_IPV6, IPV6_RECVERR, &(int){1}, sizeof(int));
+	}
+
 	sa.sin.sin_family = family;
 	if (fd < 0 || bind(fd, (void *)&sa, sl) < 0) {
 		if (fd >= 0) close(fd);
@@ -183,20 +240,65 @@ int __res_msend_rc(int nqueries, const unsigned char *const *queries,
 		for (i=0; i<nqueries && alens[i]>0; i++);
 		if (i==nqueries) break;
 
+		/* Stop waiting if no nameserver can be reached, unless a
+		 * TCP query is still in progress. This is reported as no
+		 * reply, the same way as the timeout. */
+		if (ndead == nns) {
+			for (i=0; i<nqueries && alens[i]>=0; i++);
+			if (i==nqueries) break;
+		}
+
 		if (t2-t1 >= retry_interval) {
 			/* Query all configured namservers in parallel */
 			for (i=0; i<nqueries; i++)
 				if (!alens[i])
-					for (j=0; j<nns; j++)
-						sendto(fd, queries[i],
+					for (j=0; j<nns; j++) {
+						if (ns_dead[j]) continue;
+						if (sendto(fd, queries[i],
 							qlens[i], MSG_NOSIGNAL,
-							(void *)&ns[j], sl);
+							(void *)&ns[j], sl) < 0
+						    && is_unreachable(errno)) {
+							ns_dead[j] = 1;
+							ndead++;
+						}
+					}
 			t1 = t2;
 			servfail_retry = 2 * nqueries;
+			if (ndead == nns) continue;
 		}
 
 		/* Wait for a response, or until time to retry */
 		if (poll(pfd, nqueries+1, t1+retry_interval-t2) <= 0) continue;
+
+		/* Drain the queue of ICMP errors, and mark the nameservers
+		 * they come from as unreachable. */
+		if (pfd[nqueries].revents & POLLERR) for (;;) {
+			union {
+				struct cmsghdr align;
+				char buf[CMSG_SPACE(sizeof(struct ee) + sizeof(union sa))];
+			} cbuf;
+			struct msghdr mh = {
+				.msg_name = (void *)&sa,
+				.msg_namelen = sl,
+				.msg_control = cbuf.buf,
+				.msg_controllen = sizeof cbuf.buf
+			};
+			struct cmsghdr *c;
+			if (recvmsg(fd, &mh, MSG_ERRQUEUE) < 0) break;
+			for (c=CMSG_FIRSTHDR(&mh); c; c=CMSG_NXTHDR(&mh, c)) {
+				struct ee e;
+				if (!(c->cmsg_level == IPPROTO_IP && c->cmsg_type == IP_RECVERR)
+				    && !(c->cmsg_level == IPPROTO_IPV6 && c->cmsg_type == IPV6_RECVERR))
+					continue;
+				memcpy(&e, CMSG_DATA(c), sizeof e);
+				if (!is_unreachable(e.ee_errno)) continue;
+				j = find_ns(&sa, ns, nns, family);
+				if (j<nns && !ns_dead[j]) {
+					ns_dead[j] = 1;
+					ndead++;
+				}
+			}
+		}
 
 		while (next < nqueries) {
 			struct msghdr mh = {
