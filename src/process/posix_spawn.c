@@ -20,12 +20,16 @@ struct args {
 	char *const *argv, *const *envp;
 };
 
+/* The child shares the memory with the parent and uses kernel descriptors, see fdmap.c.
+ * The descriptors of the parent (the pipe, the descriptors to close or to duplicate) are
+ * translated; the target descriptors of dup2 and open are the descriptors of the new
+ * program, which are kernel descriptors. */
 static int __sys_dup2(int old, int new)
 {
 #ifdef SYS_dup2
-	return __syscall(SYS_dup2, old, new);
+	return __syscall_raw(SYS_dup2, old, new);
 #else
-	return __syscall(SYS_dup3, old, new, 0);
+	return __syscall_raw(SYS_dup3, old, new, 0);
 #endif
 }
 
@@ -34,12 +38,13 @@ static int child(void *args_vp)
 	int i, ret;
 	struct sigaction sa = {0};
 	struct args *args = args_vp;
-	int p = args->p[1];
+	int p = __fdmap_kernel(args->p[1]);
 	const posix_spawn_file_actions_t *fa = args->fa;
 	const posix_spawnattr_t *restrict attr = args->attr;
 	sigset_t hset;
 
-	close(args->p[0]);
+	__pthread_self()->fdmap_vfork_child = 1;
+	__syscall_raw(SYS_close, __fdmap_kernel(args->p[0]));
 
 	/* All signal dispositions must be either SIG_DFL or SIG_IGN
 	 * before signals are unblocked. Otherwise a signal handler
@@ -87,23 +92,27 @@ static int child(void *args_vp)
 		int fd;
 		for (op = fa->__actions; op->next; op = op->next);
 		for (; op; op = op->prev) {
+			/* The descriptor this operation affects in the child. */
+			int target = op->fd;
+			if (op->cmd == FDOP_CLOSE || op->cmd == FDOP_FCHDIR)
+				target = __fdmap_kernel(op->fd);
 			/* It's possible that a file operation would clobber
 			 * the pipe fd used for synchronizing with the
 			 * parent. To avoid that, we dup the pipe onto
 			 * an unoccupied fd. */
-			if (op->fd == p) {
-				ret = __syscall(SYS_dup, p);
+			if (target == p) {
+				ret = __syscall_raw(SYS_dup, p);
 				if (ret < 0) goto fail;
-				__syscall(SYS_close, p);
+				__syscall_raw(SYS_close, p);
 				p = ret;
 			}
 			switch(op->cmd) {
 			case FDOP_CLOSE:
-				__syscall(SYS_close, op->fd);
+				if (target >= 0) __syscall_raw(SYS_close, target);
 				break;
 			case FDOP_DUP2:
-				fd = op->srcfd;
-				if (fd == p) {
+				fd = __fdmap_kernel(op->srcfd);
+				if (fd < 0 || fd == p) {
 					ret = -EBADF;
 					goto fail;
 				}
@@ -111,20 +120,24 @@ static int child(void *args_vp)
 					if ((ret=__sys_dup2(fd, op->fd))<0)
 						goto fail;
 				} else {
-					ret = __syscall(SYS_fcntl, fd, F_GETFD);
-					ret = __syscall(SYS_fcntl, fd, F_SETFD,
+					ret = __syscall_raw(SYS_fcntl, fd, F_GETFD);
+					ret = __syscall_raw(SYS_fcntl, fd, F_SETFD,
 					                ret & ~FD_CLOEXEC);
 					if (ret<0)
 						goto fail;
 				}
 				break;
 			case FDOP_OPEN:
-				fd = __sys_open(op->path, op->oflag, op->mode);
+#ifdef SYS_open
+				fd = __syscall_raw(SYS_open, op->path, op->oflag|O_LARGEFILE, op->mode);
+#else
+				fd = __syscall_raw(SYS_openat, AT_FDCWD, op->path, op->oflag|O_LARGEFILE, op->mode);
+#endif
 				if ((ret=fd) < 0) goto fail;
 				if (fd != op->fd) {
 					if ((ret=__sys_dup2(fd, op->fd))<0)
 						goto fail;
-					__syscall(SYS_close, fd);
+					__syscall_raw(SYS_close, fd);
 				}
 				break;
 			case FDOP_CHDIR:
@@ -132,7 +145,7 @@ static int child(void *args_vp)
 				if (ret<0) goto fail;
 				break;
 			case FDOP_FCHDIR:
-				ret = __syscall(SYS_fchdir, op->fd);
+				ret = target < 0 ? -EBADF : __syscall_raw(SYS_fchdir, target);
 				if (ret<0) goto fail;
 				break;
 			}
@@ -143,7 +156,7 @@ static int child(void *args_vp)
 	 * to a different fd. We don't use F_DUPFD_CLOEXEC above because
 	 * it would fail on older kernels and atomicity is not needed --
 	 * in this process there are no threads or signal handlers. */
-	__syscall(SYS_fcntl, p, F_SETFD, FD_CLOEXEC);
+	__syscall_raw(SYS_fcntl, p, F_SETFD, FD_CLOEXEC);
 
 	pthread_sigmask(SIG_SETMASK, (attr->__flags & POSIX_SPAWN_SETSIGMASK)
 		? &attr->__mask : &args->oldmask, 0);
@@ -159,7 +172,7 @@ fail:
 	ret = -ret;
 	if (ret) {
 		int r;
-		do r = __syscall(SYS_write, p, &ret, sizeof ret);
+		do r = __syscall_raw(SYS_write, p, &ret, sizeof ret);
 		while (r<0 && r!=-EPIPE);
 	}
 	_exit(127);
@@ -197,6 +210,7 @@ int posix_spawn(pid_t *restrict res, const char *restrict path,
 
 	pid = __clone(child, stack+sizeof stack,
 		CLONE_VM|CLONE_VFORK|SIGCHLD, &args);
+	__pthread_self()->fdmap_vfork_child = 0;
 	close(args.p[1]);
 	UNLOCK(__abort_lock);
 

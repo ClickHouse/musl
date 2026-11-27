@@ -37,6 +37,8 @@ struct pthread {
 	volatile int detach_state;
 	volatile int cancel;
 	volatile unsigned char canceldisable, cancelasync;
+	/* Set in the child of vfork or posix_spawn, which shares the memory with the parent (see fdmap.c). */
+	volatile unsigned char fdmap_vfork_child;
 	unsigned char tsd_used:1;
 	unsigned char dlerror_flag:1;
 	unsigned char *map_base;

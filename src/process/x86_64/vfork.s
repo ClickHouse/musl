@@ -6,6 +6,6 @@ vfork:
 	syscall
 	push %rdx
 	mov %rax,%rdi
-	.hidden __syscall_ret
-	jmp __syscall_ret
+	.hidden __fdmap_vfork_ret
+	jmp __fdmap_vfork_ret
 .size vfork,.-vfork
