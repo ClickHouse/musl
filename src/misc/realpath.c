@@ -111,7 +111,7 @@ skip_readlink:
 			check_dir = stack[p];
 			continue;
 		}
-		if (++cnt == SYMLOOP_MAX) {
+		if (++cnt > SYMLOOP_MAX) {
 			errno = ELOOP;
 			return 0;
 		}
