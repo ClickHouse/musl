@@ -107,6 +107,81 @@ struct ee {
 	uint32_t ee_info, ee_data;
 };
 
+static void mark_dead(unsigned char *ns_dead, int *ndead, int j)
+{
+	if (!ns_dead[j]) {
+		ns_dead[j] = 1;
+		++*ndead;
+	}
+}
+
+/* Read the queue of ICMP errors, and mark the nameservers they come
+ * from as unreachable. Return the number of errors read. */
+static int drain_errors(int fd, socklen_t sl, const union sa *ns, int nns,
+	int family, unsigned char *ns_dead, int *ndead)
+{
+	int n = 0;
+	for (;;) {
+		union sa from;
+		union {
+			struct cmsghdr align;
+			char buf[CMSG_SPACE(sizeof(struct ee) + sizeof(union sa))];
+		} cbuf;
+		struct msghdr mh = {
+			.msg_name = (void *)&from,
+			.msg_namelen = sl,
+			.msg_control = cbuf.buf,
+			.msg_controllen = sizeof cbuf.buf
+		};
+		struct cmsghdr *c;
+		int j;
+		if (recvmsg(fd, &mh, MSG_ERRQUEUE) < 0) break;
+		n++;
+		for (c=CMSG_FIRSTHDR(&mh); c; c=CMSG_NXTHDR(&mh, c)) {
+			struct ee e;
+			if (!(c->cmsg_level == IPPROTO_IP && c->cmsg_type == IP_RECVERR)
+			    && !(c->cmsg_level == IPPROTO_IPV6 && c->cmsg_type == IPV6_RECVERR))
+				continue;
+			memcpy(&e, CMSG_DATA(c), sizeof e);
+			if (!is_unreachable(e.ee_errno)) continue;
+			j = find_ns(&from, ns, nns, family);
+			if (j<nns) mark_dead(ns_dead, ndead, j);
+		}
+	}
+	return n;
+}
+
+/* Send a query to nameserver j. With IP_RECVERR, a pending ICMP error of
+ * an earlier datagram, possibly to another nameserver, makes sendto fail
+ * with that error without sending, and clears it. So on failure, read the
+ * queued errors, which attributes them to the nameservers they come from,
+ * and send again. The nameserver is marked unreachable only when sendto
+ * fails twice in a row with no error queued, such as with no route when
+ * the loopback is down. The number of tries is bounded, and running out
+ * of them does not mark the nameserver. */
+static void send_query(int fd, const unsigned char *q, int ql, socklen_t sl,
+	const union sa *ns, int nns, int j, int family,
+	unsigned char *ns_dead, int *ndead)
+{
+	int clean = 0;
+	for (int k=0; k<4 && !ns_dead[j]; k++) {
+		int err;
+		if (sendto(fd, q, ql, MSG_NOSIGNAL, (void *)&ns[j], sl) >= 0)
+			return;
+		err = errno;
+		if (drain_errors(fd, sl, ns, nns, family, ns_dead, ndead)) {
+			clean = 0;
+			continue;
+		}
+		if (!is_unreachable(err)) return;
+		if (clean) {
+			mark_dead(ns_dead, ndead, j);
+			return;
+		}
+		clean = 1;
+	}
+}
+
 static void step_mh(struct msghdr *mh, size_t n)
 {
 	/* Adjust iovec in msghdr to skip first n bytes. */
@@ -252,16 +327,10 @@ int __res_msend_rc(int nqueries, const unsigned char *const *queries,
 			/* Query all configured namservers in parallel */
 			for (i=0; i<nqueries; i++)
 				if (!alens[i])
-					for (j=0; j<nns; j++) {
-						if (ns_dead[j]) continue;
-						if (sendto(fd, queries[i],
-							qlens[i], MSG_NOSIGNAL,
-							(void *)&ns[j], sl) < 0
-						    && is_unreachable(errno)) {
-							ns_dead[j] = 1;
-							ndead++;
-						}
-					}
+					for (j=0; j<nns; j++)
+						send_query(fd, queries[i],
+							qlens[i], sl, ns, nns, j,
+							family, ns_dead, &ndead);
 			t1 = t2;
 			servfail_retry = 2 * nqueries;
 			if (ndead == nns) continue;
@@ -272,33 +341,8 @@ int __res_msend_rc(int nqueries, const unsigned char *const *queries,
 
 		/* Drain the queue of ICMP errors, and mark the nameservers
 		 * they come from as unreachable. */
-		if (pfd[nqueries].revents & POLLERR) for (;;) {
-			union {
-				struct cmsghdr align;
-				char buf[CMSG_SPACE(sizeof(struct ee) + sizeof(union sa))];
-			} cbuf;
-			struct msghdr mh = {
-				.msg_name = (void *)&sa,
-				.msg_namelen = sl,
-				.msg_control = cbuf.buf,
-				.msg_controllen = sizeof cbuf.buf
-			};
-			struct cmsghdr *c;
-			if (recvmsg(fd, &mh, MSG_ERRQUEUE) < 0) break;
-			for (c=CMSG_FIRSTHDR(&mh); c; c=CMSG_NXTHDR(&mh, c)) {
-				struct ee e;
-				if (!(c->cmsg_level == IPPROTO_IP && c->cmsg_type == IP_RECVERR)
-				    && !(c->cmsg_level == IPPROTO_IPV6 && c->cmsg_type == IPV6_RECVERR))
-					continue;
-				memcpy(&e, CMSG_DATA(c), sizeof e);
-				if (!is_unreachable(e.ee_errno)) continue;
-				j = find_ns(&sa, ns, nns, family);
-				if (j<nns && !ns_dead[j]) {
-					ns_dead[j] = 1;
-					ndead++;
-				}
-			}
-		}
+		if (pfd[nqueries].revents & POLLERR)
+			drain_errors(fd, sl, ns, nns, family, ns_dead, &ndead);
 
 		while (next < nqueries) {
 			struct msghdr mh = {
@@ -336,9 +380,9 @@ int __res_msend_rc(int nqueries, const unsigned char *const *queries,
 				break;
 			case 2:
 				if (servfail_retry && servfail_retry--)
-					sendto(fd, queries[i],
-						qlens[i], MSG_NOSIGNAL,
-						(void *)&ns[j], sl);
+					send_query(fd, queries[i],
+						qlens[i], sl, ns, nns, j,
+						family, ns_dead, &ndead);
 			default:
 				continue;
 			}
