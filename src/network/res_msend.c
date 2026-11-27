@@ -77,26 +77,22 @@ static int is_unreachable(int err)
 	return 0;
 }
 
-/* Find the nameserver with the address and port of sa, or return nns.
- * Unlike for replies, this does not compare the whole sockaddr, because
- * the kernel does not fill the address of an error the same way. */
-static int find_ns(const union sa *sa, const union sa *ns, int nns, int family)
+/* Whether the destination of an error, sa, is the nameserver ns. Unlike
+ * for replies, this does not compare the whole sockaddr, because the
+ * kernel does not fill the address of an error the same way. The scope is
+ * compared, because the same link-local address on different interfaces
+ * is a different nameserver. The kernel sets it for link-local addresses
+ * only, as they are in the configuration. */
+static int is_ns(const union sa *sa, const union sa *ns, int family)
 {
-	int j;
-	for (j=0; j<nns; j++) {
-		if (family == AF_INET6) {
-			if (sa->sin6.sin6_family == AF_INET6
-			    && sa->sin6.sin6_port == ns[j].sin6.sin6_port
-			    && !memcmp(&sa->sin6.sin6_addr, &ns[j].sin6.sin6_addr, 16))
-				break;
-		} else {
-			if (sa->sin.sin_family == AF_INET
-			    && sa->sin.sin_port == ns[j].sin.sin_port
-			    && sa->sin.sin_addr.s_addr == ns[j].sin.sin_addr.s_addr)
-				break;
-		}
-	}
-	return j;
+	if (family == AF_INET6)
+		return sa->sin6.sin6_family == AF_INET6
+			&& sa->sin6.sin6_port == ns->sin6.sin6_port
+			&& sa->sin6.sin6_scope_id == ns->sin6.sin6_scope_id
+			&& !memcmp(&sa->sin6.sin6_addr, &ns->sin6.sin6_addr, 16);
+	return sa->sin.sin_family == AF_INET
+		&& sa->sin.sin_port == ns->sin.sin_port
+		&& sa->sin.sin_addr.s_addr == ns->sin.sin_addr.s_addr;
 }
 
 /* Layout of struct sock_extended_err from the Linux uapi header
@@ -144,8 +140,11 @@ static int drain_errors(int fd, socklen_t sl, const union sa *ns, int nns,
 				continue;
 			memcpy(&e, CMSG_DATA(c), sizeof e);
 			if (!is_unreachable(e.ee_errno)) continue;
-			j = find_ns(&from, ns, nns, family);
-			if (j<nns) mark_dead(ns_dead, ndead, j);
+			/* Mark every matching entry, as the same nameserver
+			 * can be listed more than once. */
+			for (j=0; j<nns; j++)
+				if (is_ns(&from, &ns[j], family))
+					mark_dead(ns_dead, ndead, j);
 		}
 	}
 	return n;
