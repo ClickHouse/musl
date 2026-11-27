@@ -1,6 +1,7 @@
 .global fegetround
 .type fegetround,%function
 fegetround:
+	hint #34 // bti c
 	mrs x0, fpcr
 	and w0, w0, #0xc00000
 	ret
@@ -10,6 +11,7 @@ fegetround:
 .hidden __fesetround
 .type __fesetround,%function
 __fesetround:
+	hint #34 // bti c
 	mrs x1, fpcr
 	bic w1, w1, #0xc00000
 	orr w1, w1, w0
@@ -21,6 +23,7 @@ __fesetround:
 .global fetestexcept
 .type fetestexcept,%function
 fetestexcept:
+	hint #34 // bti c
 	and w0, w0, #0x1f
 	mrs x1, fpsr
 	and w0, w0, w1
@@ -30,6 +33,7 @@ fetestexcept:
 .global feclearexcept
 .type feclearexcept,%function
 feclearexcept:
+	hint #34 // bti c
 	and w0, w0, #0x1f
 	mrs x1, fpsr
 	bic w1, w1, w0
@@ -41,6 +45,7 @@ feclearexcept:
 .global feraiseexcept
 .type feraiseexcept,%function
 feraiseexcept:
+	hint #34 // bti c
 	and w0, w0, #0x1f
 	mrs x1, fpsr
 	orr w1, w1, w0
@@ -52,6 +57,7 @@ feraiseexcept:
 .global fegetenv
 .type fegetenv,%function
 fegetenv:
+	hint #34 // bti c
 	mrs x1, fpcr
 	mrs x2, fpsr
 	stp w1, w2, [x0]
@@ -63,6 +69,7 @@ fegetenv:
 .global fesetenv
 .type fesetenv,%function
 fesetenv:
+	hint #34 // bti c
 	mov x1, #0
 	mov x2, #0
 	cmn x0, #1
@@ -73,3 +80,17 @@ fesetenv:
 	mov w0, #0
 	ret
 .size fesetenv,.-fesetenv
+
+// The BTI property (GNU_PROPERTY_AARCH64_FEATURE_1_AND): the linker enables BTI for an executable
+// only if every input object has it. With the `bti c` landing pads at the function entries above,
+// this code is valid with BTI enforced; both are no-ops for builds and CPUs without BTI.
+.section .note.gnu.property,"a"
+.p2align 3
+.word 4
+.word 16
+.word 5
+.asciz "GNU"
+.word 0xc0000000
+.word 4
+.word 1
+.word 0

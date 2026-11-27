@@ -22,6 +22,7 @@ __syscall_cp_asm:
 // syscall, e.g. clock_nanosleep under sleep() - falls apart right after this
 // frame and never reaches the calling application code.
 .cfi_startproc
+	hint #34 // bti c
 __cp_begin:
 	ldr w0,[x0]
 	cbnz w0,__cp_cancel
@@ -39,3 +40,17 @@ __cp_cancel:
 	b __cancel
 .cfi_endproc
 .size __syscall_cp_asm,.-__syscall_cp_asm
+
+// The BTI property (GNU_PROPERTY_AARCH64_FEATURE_1_AND): the linker enables BTI for an executable
+// only if every input object has it. With the `bti c` landing pads at the function entries above,
+// this code is valid with BTI enforced; both are no-ops for builds and CPUs without BTI.
+.section .note.gnu.property,"a"
+.p2align 3
+.word 4
+.word 16
+.word 5
+.asciz "GNU"
+.word 0xc0000000
+.word 4
+.word 1
+.word 0

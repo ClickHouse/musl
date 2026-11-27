@@ -6,6 +6,7 @@
 .hidden __tlsdesc_static
 .type __tlsdesc_static,@function
 __tlsdesc_static:
+	hint #34 // bti c
 	ldr x0,[x0,#8]
 	ret
 .size __tlsdesc_static,.-__tlsdesc_static
@@ -20,6 +21,7 @@ __tlsdesc_static:
 .hidden __tlsdesc_dynamic
 .type __tlsdesc_dynamic,@function
 __tlsdesc_dynamic:
+	hint #34 // bti c
 	stp x1,x2,[sp,#-16]!
 	mrs x1,tpidr_el0      // tp
 	ldr x0,[x0,#8]        // p
@@ -31,3 +33,17 @@ __tlsdesc_dynamic:
 	ldp x1,x2,[sp],#16
 	ret
 .size __tlsdesc_dynamic,.-__tlsdesc_dynamic
+
+// The BTI property (GNU_PROPERTY_AARCH64_FEATURE_1_AND): the linker enables BTI for an executable
+// only if every input object has it. With the `bti c` landing pads at the function entries above,
+// this code is valid with BTI enforced; both are no-ops for builds and CPUs without BTI.
+.section .note.gnu.property,"a"
+.p2align 3
+.word 4
+.word 16
+.word 5
+.asciz "GNU"
+.word 0xc0000000
+.word 4
+.word 1
+.word 0

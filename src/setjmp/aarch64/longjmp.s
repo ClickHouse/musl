@@ -4,6 +4,7 @@
 .type longjmp,%function
 _longjmp:
 longjmp:
+	hint #34 // bti c
 	// IHI0055B_aapcs64.pdf 5.1.1, 5.1.2 callee saved registers
 	ldp x19, x20, [x0,#0]
 	ldp x21, x22, [x0,#16]
@@ -25,3 +26,17 @@ longjmp:
 	br x30
 .size _longjmp,.-_longjmp
 .size longjmp,.-longjmp
+
+// The BTI property (GNU_PROPERTY_AARCH64_FEATURE_1_AND): the linker enables BTI for an executable
+// only if every input object has it. With the `bti c` landing pads at the function entries above,
+// this code is valid with BTI enforced; both are no-ops for builds and CPUs without BTI.
+.section .note.gnu.property,"a"
+.p2align 3
+.word 4
+.word 16
+.word 5
+.asciz "GNU"
+.word 0xc0000000
+.word 4
+.word 1
+.word 0

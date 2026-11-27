@@ -27,3 +27,18 @@ __restore_rt:
 	svc 0
 .size __restore,.-__restore
 .size __restore_rt,.-__restore_rt
+
+// The BTI property (GNU_PROPERTY_AARCH64_FEATURE_1_AND): the linker enables BTI for an executable
+// only if every input object has it. The restorers need no landing pad: a signal handler returns to
+// them with `ret`, which BTI does not check. They must not get one either: unwinders (libunwind, gdb)
+// recognize a signal frame by these exact two instructions at the return address.
+.section .note.gnu.property,"a"
+.p2align 3
+.word 4
+.word 16
+.word 5
+.asciz "GNU"
+.word 0xc0000000
+.word 4
+.word 1
+.word 0

@@ -28,6 +28,7 @@ memset:
 // .cfi_startproc emits complete unwind info. Without an FDE, stack traces
 // from profiling signals or faults landing here lose the caller chain.
 .cfi_startproc
+	hint #34 // bti c
 	dup     v0.16B, valw
 	add     dstend, dstin, count
 
@@ -119,3 +120,16 @@ memset:
 .cfi_endproc
 .size memset,.-memset
 
+// The BTI property (GNU_PROPERTY_AARCH64_FEATURE_1_AND): the linker enables BTI for an executable
+// only if every input object has it. With the `bti c` landing pads at the function entries above,
+// this code is valid with BTI enforced; both are no-ops for builds and CPUs without BTI.
+.section .note.gnu.property,"a"
+.p2align 3
+.word 4
+.word 16
+.word 5
+.asciz "GNU"
+.word 0xc0000000
+.word 4
+.word 1
+.word 0
